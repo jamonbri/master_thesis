@@ -9,7 +9,7 @@ def download_by_name(
     base_url: str = "https://datarepo.eng.ucsd.edu/mcauley_group/gdrive"
 ) -> None:
     """Downloads a specific dataset from a project by filename"""
-    file_path = f"datasets/{project}/{fname}"
+    file_path = f"data/datasets/{project}/{fname}"
     if os.path.exists(file_path):
         print(f"Dataset {fname} already exists")
         return
