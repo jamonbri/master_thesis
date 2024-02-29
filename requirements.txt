@@ -199,6 +199,7 @@ referencing==0.33.0
     #   jsonschema-specifications
 requests==2.31.0
     # via
+    #   -r requirements.in
     #   cookiecutter
     #   solara
 rich==13.7.0
