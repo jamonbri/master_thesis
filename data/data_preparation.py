@@ -9,7 +9,7 @@ import re
 
 def load_data(
     file_name: str, 
-    head: int = 500
+    head: int | None = 500
 ) -> pd.DataFrame:
     file_path = f"datasets/{file_name}"
     file_extension = file_name.split(".")[-1]
@@ -59,16 +59,16 @@ def get_genreline_divs(itemId: str) -> list:
     else:
         raise ConnectionError(f"Satus code: {response.status_code}, message: {response.text}")
 
-def get_model_dataframe(n_users: int, sample_users: int) -> pd.DataFrame:
+def get_model_dataframe(n_users: int | None, sample_users: int) -> pd.DataFrame:
     df_users_raw = load_data("goodreads/goodreads_interactions.csv", n_users)
     user_ids_sample = df_users_raw["user_id"].sample(sample_users)
     df_users_filtered = df_users_raw.loc[df_users_raw["user_id"].isin(user_ids_sample)]
     df_items_raw = load_data("goodreads/goodreads_book_genres_initial.json", None)
     unique_item_ids = df_users_filtered["book_id"].unique().tolist()
     df_items_filtered = df_items_raw.loc[df_items_raw["book_id"].isin(unique_item_ids)]
-    df_items_filtered["genres"] = df_items_filtered.loc[:, "genres"].apply(get_genres_from_dict)
+    df_items_filtered["new_genres"] = df_items_filtered.loc[:, "genres"].apply(get_genres_from_dict)
     df_combined = pd.merge(df_users_filtered, df_items_filtered, how="left", on="book_id")
-    return df_combined.dropna(subset=["genres"]).loc[df_combined["is_read"] == 1]
+    return df_combined.dropna(subset=["new_genres"]).loc[df_combined["is_read"] == 1]
 
 def get_genres_from_dict(d: dict) -> dict:
     genres = {}
@@ -84,8 +84,8 @@ def get_genres_from_dict(d: dict) -> dict:
 def get_category_vector(df: pd.DataFrame) -> list:
     unique_genres = set()
     for _, row in df.iterrows():
-        if isinstance(row["genres"], dict):
-            unique_genres.update(row["genres"].keys())
+        if isinstance(row["new_genres"], dict):
+            unique_genres.update(row["new_genres"].keys())
     return list(unique_genres)
 
 def get_users_vectors(df: pd.DataFrame, vector: list) -> pd.DataFrame:
@@ -97,12 +97,13 @@ def get_users_vectors(df: pd.DataFrame, vector: list) -> pd.DataFrame:
         counts = defaultdict(int)
         tmp_df = df.loc[df["user_id"] == user]
         for _, row in tmp_df.iterrows():
-            for k, v in row["genres"].items():
+            for k, v in row["new_genres"].items():
                 weighted_sums[k] += v * row["rating"] / 5
                 counts[k] += 1
         user_vector = {key: weighted_sums[key] / counts[key] for key in weighted_sums}
         user_vector_total = sum(user_vector.values())
-        user_vector = {key: user_vector[key] / user_vector_total for key in user_vector}
+        if user_vector_total:
+            user_vector = {key: user_vector[key] / user_vector_total for key in user_vector}
         results.loc[user] = user_vector
-    return results
+    return results.fillna(0)
 
