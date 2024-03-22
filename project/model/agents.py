@@ -1,6 +1,7 @@
 import mesa
 import pandas as pd
 import numpy as np
+from data.data_preparation import get_categories
 
 class ItemAgent(mesa.Agent):
     
@@ -63,15 +64,14 @@ class UserAgent(mesa.Agent):
         self.children = user_row["children"]
         self.fiction = user_row["fiction"]
 
-    def calculate_similarity(self, other: mesa.Agent) -> np.array:
-        pass
+    def get_vector_from_attr(self) -> np.array:
+        cat_cols = get_categories()
+        vector = []
+        for col in cat_cols:
+            vector.append(getattr(self, col))
+        array = np.array(vector)
+        return array.reshape(1, -1)
     
     def step(self) -> None:
         print(f"Taking a step")
-
-def create_user(user_row: pd.Series, model: mesa.Model) -> UserAgent:
-    return UserAgent(user_row, model)
-
-def create_item(item_row: pd.Series, model: mesa.Model) -> ItemAgent:
-    return ItemAgent(item_row, model)
     
