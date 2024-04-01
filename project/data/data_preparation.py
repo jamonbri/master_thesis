@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 from sklearn.metrics.pairwise import cosine_similarity
 
 def get_categories() -> list[str]:
@@ -23,33 +24,37 @@ def get_categories() -> list[str]:
     ]
 
 def load_data(
-    file_name: str, 
+    file_path: str, 
     head: int | None = 500
 ) -> pd.DataFrame:
     """Loads data from CSV and JSON files"""
 
-    file_path = f"data/datasets/{file_name}"
-    file_extension = file_name.split(".")[-1]
-    if file_name.split(".")[-1] == "csv":
+    file_extension = file_path.split(".")[-1]
+    if file_extension == "csv":
         df = pd.read_csv(file_path, nrows=head)
     elif file_extension == "json":
         df = pd.read_json(file_path, lines=True, orient='records', nrows=head)
-    else:
-        raise Exception(f"Format of dataset {file_name} not loadable.")
     return df
 
 def get_model_df(n_users: int | None = None, sample_users: int = 100, dummy: bool = False) -> pd.DataFrame:
     """Gets general model df with interactions between users and items"""
     
     print("Loading data...")
+
+    try:
+        base_path = os.path.dirname(__file__)
+    except NameError:
+        base_path = os.getcwd()
+
+    file_path = os.path.join(base_path, "datasets/goodreads")
     
     if dummy:  # Preload for testing
         print("Dummy data read")
-        return pd.read_csv("data/datasets/goodreads/goodreads_interactions_sample.csv", index_col="index")
+        return pd.read_csv(f"{file_path}/goodreads_interactions_sample.csv", index_col="index")
     
     # Load all users data
     
-    df_users_raw = load_data("goodreads/goodreads_interactions.csv", n_users)
+    df_users_raw = load_data(f"{file_path}/goodreads_interactions.csv", n_users)
     user_ids_sample = df_users_raw["user_id"].sample(sample_users)
     df_users_filtered = df_users_raw.loc[df_users_raw["user_id"].isin(user_ids_sample)]
     print("    - Users loaded")
@@ -61,7 +66,7 @@ def get_model_df(n_users: int | None = None, sample_users: int = 100, dummy: boo
     
     # Load all items data
 
-    df_items_raw = load_data("goodreads/goodreads_book_genres_initial.json", None)
+    df_items_raw = load_data(f"{file_path}/goodreads_book_genres_initial.json", None)
     unique_item_ids = df_users_filtered["book_id"].unique().tolist()
     df_items_filtered = df_items_raw.loc[df_items_raw["book_id"].isin(unique_item_ids)]
     df_items_filtered = df_items_filtered[df_items_filtered["genres"].apply(lambda x: bool(x))]
