@@ -1,9 +1,7 @@
 import mesa
 import pandas as pd
-import numpy as np
 from model.agents import ItemAgent, UserAgent
 from data.data_preparation import get_model_df, get_users_df, get_items_df
-from sklearn.metrics.pairwise import cosine_similarity
 
 
 class RecommenderSystemModel(mesa.Model):
@@ -14,18 +12,38 @@ class RecommenderSystemModel(mesa.Model):
         priority: str | None = None,
         dummy: bool = False
     ):
+        
+        print("Initializing model...\n")
         super().__init__()
         self.num_users = n_users
         self.schedule = mesa.time.RandomActivation(self)
+        
         df = get_model_df(sample_users=n_users, dummy=dummy)
-        df_users = get_users_df(df)
+        len_df = len(df)
+        print(f"Model dataframe ready. Interactions: {len_df}")
+        
         df_items = get_items_df(df)
+        len_df_items = len(df_items)
+        print(f"Items dataframe ready. Items: {len_df_items}")
+        
+        df_users = get_users_df(df, df_items)
+        len_df_users = len(df_users)
+        print(f"Users dataframe ready. Users: {len_df_users}")
+        
+        print("Creating user agents...")
+        df_users["unique_id"] = range(1, len_df_users + 1)
         user_agents = df_users.apply(self.create_user, axis=1)
         for a in user_agents:
             self.schedule.add(a)
+        print("Users added.")
+        
+        print("Creating item agents...")
+        df_items["unique_id"] = range(len_df_users + 1, len_df_users + 1 + len_df_items)
         item_agents = df_items.apply(self.create_item, axis=1)
         for i in item_agents:
             self.schedule.add(i)
+        print("Items added.")
+        print("Finished model initialization.")
 
     def step(self) -> None:
         self.schedule.step()
@@ -36,20 +54,7 @@ class RecommenderSystemModel(mesa.Model):
     def create_item(self, item_row: pd.Series) -> ItemAgent:
         return ItemAgent(item_row, self)
 
-    def calculate_cosine_similarity(self, agent_a: UserAgent, agent_b: UserAgent) -> np.ndarray:
-        X = agent_a.get_vector_from_attr()
-        Y = agent_b.get_vector_from_attr()
-        return cosine_similarity(X, Y)
-
-    def find_most_similar_agent(self, agent: UserAgent) -> UserAgent | None:
-        max_similarity = -1
-        most_similar_agent = None
-        for other_agent in self.get_agents_of_type(UserAgent):
-            if other_agent != agent:
-                similarity = self.calculate_cosine_similarity(agent, other_agent)
-                if similarity > max_similarity:
-                    max_similarity = similarity
-                    most_similar_agent = other_agent
-        return most_similar_agent
-
-    
+    def run_model(self, n: int = 10) -> None:
+        for i in range(n):
+            self.step()
+            print(f"Step {i + 1} executed.")
