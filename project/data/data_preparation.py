@@ -109,13 +109,24 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
     items_df = tmp_df.groupby(by=["book_id"]).agg(aggregations)
     items_df["vector"] = items_df.apply(lambda row: np.array(row[cat_cols]).reshape(1, -1), axis=1)
     items_df = items_df.drop(cat_cols, axis=1)
-    if not priority:
-        items_df["priority"] = 0
-    elif priority == "random":
-        items_df["priority"] = np.random.rand(len(items_df))
+    items_df["priority"] = items_df.apply(calculate_priority, args=(priority,), axis=1)
     return items_df
 
-def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame, based_on: str = "all") -> pd.DataFrame:
+def calculate_priority(row: pd.Series, priority: str | None = None) -> float:
+    """Calculate priority column for items"""
+
+    categories = get_categories()
+    if not priority:
+        return 0
+    elif priority == "random":
+        return float(np.random.random() > 0.5)
+    elif priority in categories:
+        cat_index = categories.index(priority)
+        max_value = np.max(row["vector"])
+        max_indices = np.where(row["vector"] == max_value)[1]
+        return float(cat_index in max_indices and not np.all(row["vector"] == 0))
+
+def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame) -> pd.DataFrame:
     """Get aggregated users df"""
     
     print("Getting users dataframe...")
