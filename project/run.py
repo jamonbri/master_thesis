@@ -9,8 +9,9 @@ def main() -> None:
     parser.add_argument("--dummy", type=bool, default=False, help="Use dummy data. Needs to be presaved.")
     parser.add_argument("--steps", type=int, default=10, help="Number of steps.")
     parser.add_argument("--plot_agent", type=int, default=0, help="Return plots of agent.")
+    parser.add_argument("--priority", type=str | None, default=None, help="Hidden item priority. Available options: None, 'random' or item category")
     args = parser.parse_args()
-    rec_sys = RecommenderSystemModel(n_users=args.n_users, dummy=args.dummy, steps=args.steps)
+    rec_sys = RecommenderSystemModel(n_users=args.n_users, dummy=args.dummy, steps=args.steps, priority=args.priority)
     rec_sys.run_model()
     results_df = rec_sys.get_processed_df()
     if args.plot_agent:
