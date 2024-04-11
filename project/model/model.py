@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from model.agents import ItemAgent, UserAgent
 from data.data_preparation import get_model_df, get_users_df, get_items_df, get_categories
+from data.results import Results
 
 
 def get_vector(agent: mesa.Agent) -> np.array:
@@ -80,6 +81,12 @@ class RecommenderSystemModel(mesa.Model):
             agent_reporters={"vector": lambda a: get_vector(a)}
         )
 
+        # Create results folder
+        self.results = Results()
+        self.results.store(
+            prefix="initial", data=[("interactions", df), ("items", df_items), ("users", df_users)]
+        )
+
     def step(self) -> None:
         """
         Advance model by one step
@@ -106,6 +113,7 @@ class RecommenderSystemModel(mesa.Model):
         for i in range(self.steps):
             self.step()
             print(f"Step {i + 1} executed.")
+        self.results.store(prefix="run", data=[("vectors", self.get_processed_df())])
 
     def get_processed_df(self) -> pd.DataFrame:
         """
