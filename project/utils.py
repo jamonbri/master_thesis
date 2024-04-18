@@ -1,6 +1,12 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
+
+def string_to_array(s):
+    s = s.strip("[]")
+    s = s.split()
+    return np.array([float(x) for x in s]).reshape(1, -1)
 
 def plot_agent_vector(df: pd.DataFrame, agent_id: int) -> None:
     filtered_df = df.xs(agent_id, level=1)

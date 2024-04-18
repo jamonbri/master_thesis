@@ -135,7 +135,7 @@ def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame) -> pd.DataFrame:
     for col in cat_cols:
         tmp_df[col] = tmp_df[col].apply(lambda x: 1 if x > 0 else 0)
     aggregations = {
-        "is_reviewed": "mean",
+        "is_reviewed": "sum",
         "is_read": "sum",
         "rating": "mean",
         "book_id": lambda x: list(x)

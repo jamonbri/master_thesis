@@ -80,6 +80,7 @@ class UserAgent(mesa.Agent):
         self.mean_rating = user_row["rating"]
         self.n_books = user_row["is_read"]
         self.vector = user_row["vector"]
+        self.books_consumed = []
 
     def get_read_probability(self) -> float:
         """
@@ -103,9 +104,7 @@ class UserAgent(mesa.Agent):
         """
         Calculate cosine similarity between user's own vector and other agent's vector (user or item)
         """
-        X = self.normalize_vector()
-        Y = agent_b.normalize_vector()
-        return cosine_similarity(X, Y)
+        return cosine_similarity(self.vector, agent_b.vector)
 
     def find_most_similar_agent(self) -> UserAgent | None:
         """
@@ -171,6 +170,7 @@ class UserAgent(mesa.Agent):
         self.vector += item_vector
         similarity = self.calculate_cosine_similarity(item)
         self.books.update({item.book_id: similarity[0][0]})
+        self.books_consumed.append(item.book_id)
         return similarity[0][0]
     
     def step(self) -> None:
