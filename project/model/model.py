@@ -21,8 +21,8 @@ class RecommenderSystemModel(mesa.Model):
     
     def __init__(
         self, 
-        n_users: int,
-        steps: int = 10,
+        n_users: int = 2,
+        steps: int = 1,
         priority: str | None = None,
         dummy: bool = False
     ):
@@ -43,6 +43,10 @@ class RecommenderSystemModel(mesa.Model):
         self.schedule = mesa.time.RandomActivation(self)
         self.steps = steps
         self.priority = priority
+
+        # Check at least 2 users
+        if self.num_users < 2:
+            raise Exception("At least 2 users expected.")
         
         # Model dataframe extraction
         df = get_model_df(sample_users=n_users, dummy=dummy)
