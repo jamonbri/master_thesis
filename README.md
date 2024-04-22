@@ -1,3 +1,3 @@
 # Master Thesis
 
-Javier Mondragon 5837618
+Javier Mondragon
