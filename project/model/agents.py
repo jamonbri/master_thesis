@@ -72,6 +72,7 @@ class UserAgent(mesa.Agent):
                 is_reviewed: number of books reviewed by user
                 book_id: list of book IDs interacted by user
                 vector: category vector as numpy array
+                rec_proba: probability of getting a recommendation
         """
         super().__init__(unique_id=user_row["unique_id"], model=model)
         self.user_id = user_row.name
@@ -80,8 +81,15 @@ class UserAgent(mesa.Agent):
         self.mean_rating = user_row["rating"]
         self.n_books = user_row["is_read"]
         self.vector = user_row["vector"]
+        self.rec_proba = user_row["rec_proba"]
         self.books_consumed = []
 
+    def get_recommendation_probability(self) -> float:
+        """
+        Get probability of getting a recommendation
+        """
+        return self.rec_proba    
+    
     def get_read_probability(self) -> float:
         """
         Calculate read probability as proportion of read books from total interacted
@@ -178,7 +186,7 @@ class UserAgent(mesa.Agent):
         Single step of user agent
         """
         # Should agent get recommendations?
-        if random.random() > 0.5:
+        if random.random() > self.get_recommendation_probability():
             most_similar_agent = self.find_most_similar_agent()
             recs = most_similar_agent.get_recommendations()
             # Should agent read book?

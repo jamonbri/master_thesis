@@ -1,7 +1,6 @@
 import mesa
 import pandas as pd
 import numpy as np
-import warnings
 from model.agents import ItemAgent, UserAgent
 from data.data_preparation import get_model_df, get_users_df, get_items_df, get_categories
 from data.results import Results
@@ -63,7 +62,8 @@ class RecommenderSystemModel(mesa.Model):
         n_users: int = 2,
         steps: int = 1,
         priority: str | None = None,
-        dummy: bool = False
+        dummy: bool = False,
+        seed: int | None = None
     ):
         """
         Create a new recommender system model instance
@@ -73,6 +73,7 @@ class RecommenderSystemModel(mesa.Model):
             steps: number of steps per simulation run
             priority: item priority for hidden agenda
             dummy: use of pre-loaded data for faster data loading
+            seed: random state seed for sampling users
         """
         
         # Model initialization
@@ -89,19 +90,16 @@ class RecommenderSystemModel(mesa.Model):
             raise Exception("At least 2 users expected.")
         
         # Model dataframe extraction
-        df = get_model_df(sample_users=n_users, dummy=dummy)
+        df = get_model_df(sample_users=n_users, dummy=dummy, seed=seed)
         len_df = len(df)
-        print(f"    - Model dataframe ready. Interactions: {len_df}")
         
         # Items dataframe extraction
         df_items = get_items_df(df, self.priority)
         len_df_items = len(df_items)
-        print(f"    - Items dataframe ready. Items: {len_df_items}")
         
         # Users dataframe extraction
         df_users = get_users_df(df, df_items)
         len_df_users = len(df_users)
-        print(f"    - Users dataframe ready. Users: {len_df_users}")
         
         # User agents creation
         print("Creating user agents...")
@@ -109,7 +107,7 @@ class RecommenderSystemModel(mesa.Model):
         user_agents = df_users.apply(self.create_user, axis=1)
         for a in user_agents:
             self.schedule.add(a)
-        print("Users added.")
+        print(f"    - Users added")
         
         # Item agents creation
         print("Creating item agents...")
@@ -117,8 +115,8 @@ class RecommenderSystemModel(mesa.Model):
         item_agents = df_items.apply(self.create_item, axis=1)
         for i in item_agents:
             self.schedule.add(i)
-        print("Items added.")
-        print("Finished model initialization.")
+        print(f"    - Items added")
+        print("Finished model initialization!")
 
         # Data collection setup
         self.datacollector = mesa.DataCollector(
@@ -134,6 +132,7 @@ class RecommenderSystemModel(mesa.Model):
 
         # Create results folder
         self.results = Results()
+        self.results.create_new_directory()
         self.csv_filepaths.extend(
             self.results.store(
                 prefix="initial", data=[("interactions", df), ("items", df_items), ("users", df_users)]

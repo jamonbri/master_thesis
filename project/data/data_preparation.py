@@ -4,6 +4,9 @@ import os
 from sklearn.metrics.pairwise import cosine_similarity
 
 def get_categories() -> list[str]:
+    """
+    Return list of categories
+    """
     return [
         "fantasy", 
         "non_fiction", 
@@ -27,7 +30,13 @@ def load_data(
     file_path: str, 
     head: int | None = 500
 ) -> pd.DataFrame:
-    """Loads data from CSV and JSON files"""
+    """
+    Loads data from CSV and JSON files
+    
+    Args:
+        file_path: file path 
+        head: number of rows to load
+    """
 
     file_extension = file_path.split(".")[-1]
     if file_extension == "csv":
@@ -36,8 +45,21 @@ def load_data(
         df = pd.read_json(file_path, lines=True, orient='records', nrows=head)
     return df
 
-def get_model_df(n_users: int | None = None, sample_users: int = 100, dummy: bool = False) -> pd.DataFrame:
-    """Gets general model df with interactions between users and items"""
+def get_model_df(
+    n_users: int | None = None, 
+    sample_users: int = 100, 
+    dummy: bool = False, 
+    seed: int | None = None
+) -> pd.DataFrame:
+    """
+    Gets general model df with interactions between users and items
+
+    Args:
+        n_users: number of users to extract from CSV
+        sample_users: number of users to sample (i.e. agents)
+        dummy: load a pre-saved dummy dataset
+        seed: random state seed for user sampling
+    """
     
     print("Loading data...")
 
@@ -55,7 +77,7 @@ def get_model_df(n_users: int | None = None, sample_users: int = 100, dummy: boo
     # Load all users data
     
     df_users_raw = load_data(f"{file_path}/goodreads_interactions.csv", n_users)
-    user_ids_sample = df_users_raw["user_id"].sample(sample_users)
+    user_ids_sample = df_users_raw["user_id"].sample(n=sample_users, random_state=seed)
     df_users_filtered = df_users_raw.loc[df_users_raw["user_id"].isin(user_ids_sample)]
     print("    - Users loaded")
 
@@ -81,10 +103,16 @@ def get_model_df(n_users: int | None = None, sample_users: int = 100, dummy: boo
     # Combine dfs and return
     
     df_combined = pd.merge(df_users_filtered, df_items_result, how="inner", on="book_id")
+    print(f"    - Model dataframe ready. Interactions: {len(df_combined)}")
     return df_combined.drop("genres", axis=1)
 
 def reformat_dict(d: dict) -> dict:
-    """Reformats dict from JSON as columns for df"""
+    """
+    Reformats dict from JSON as columns for df
+
+    Args: 
+        d: dictionary containing categories and their count
+    """
     
     genres = {}
     for genre, value in d.items():
@@ -95,7 +123,13 @@ def reformat_dict(d: dict) -> dict:
     return genres
 
 def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
-    """Get aggregated items df"""
+    """
+    Get aggregated items df
+    
+    Args:
+        df: interactions dataframe
+        priority: item priority strategy
+    """
     
     print("Getting items dataframe...")
     cat_cols = get_categories()
@@ -110,10 +144,17 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
     items_df["vector"] = items_df.apply(lambda row: np.array(row[cat_cols]).reshape(1, -1), axis=1)
     items_df = items_df.drop(cat_cols, axis=1)
     items_df["priority"] = items_df.apply(calculate_priority, args=(priority,), axis=1)
+    print(f"    - Items dataframe ready. Items: {len(items_df)}")
     return items_df
 
 def calculate_priority(row: pd.Series, priority: str | None = None) -> float:
-    """Calculate priority column for items"""
+    """
+    Calculate priority column for items
+    
+    Args:
+        row: items dataframe row
+        priority: priority strategy
+    """
 
     categories = get_categories()
     if not priority:
@@ -127,7 +168,13 @@ def calculate_priority(row: pd.Series, priority: str | None = None) -> float:
         return float(cat_index in max_indices and not np.all(row["vector"] == 0))
 
 def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame) -> pd.DataFrame:
-    """Get aggregated users df"""
+    """
+    Get aggregated users df
+    
+    Args: 
+        df: interactions dataframe
+        df_items: items dataframe
+    """
     
     print("Getting users dataframe...")
     tmp_df = df.copy()
@@ -145,21 +192,25 @@ def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame) -> pd.DataFrame:
     users_df["vector"] = users_df.apply(lambda row: np.array(row[cat_cols]).reshape(1, -1), axis=1)
     users_df = users_df.drop(cat_cols, axis=1)
     users_df["book_id"] = users_df.apply(calculate_book_score, args=(df_items,), axis=1)
-    return users_df
+    users_df["book_id_length"] = users_df["book_id"].apply(len)
+    max_book_list = users_df["book_id_length"].max()
+    users_df["rec_proba"] = users_df["book_id_length"] / max_book_list
+    print(f"    - Users dataframe ready. Users: {len(users_df)}")
+    return users_df.drop("book_id_length", axis=1)
 
 def calculate_book_score(row: pd.Series, df_items: pd.DataFrame) -> dict:
-    """Calulate item scores based on cosine similarity with users"""
+    """
+    Calculate item scores based on cosine similarity with users
+    
+    Args:
+        row: users dataframe row
+        df_items: items dataframe
+    """
 
     books = {}
-    normalized_user_vector = normalize_vector(row["vector"])
+    user_vector = row["vector"]
     for book_id in row["book_id"]:
         item_vector = df_items[df_items.index == book_id]["vector"].item()
-        normalized_item_vector = normalize_vector(item_vector)
-        similarity = cosine_similarity(normalized_user_vector, normalized_item_vector)
+        similarity = cosine_similarity(user_vector, item_vector)
         books.update({book_id: similarity[0][0]})
     return books
-    
-def normalize_vector(v: np.array) -> np.array:
-    if not np.count_nonzero(v):
-        return v
-    return (v - v.min()) / (v.max() - v.min())

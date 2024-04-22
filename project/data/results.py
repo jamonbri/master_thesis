@@ -10,6 +10,9 @@ class Results:
     """
 
     def __init__(self) -> None:
+        pass
+    
+    def create_new_directory(self) -> None:
         """
         Creates a new results directory for the model instance files
         """
@@ -78,8 +81,8 @@ class Results:
         for agent_id, group in filtered_df.groupby("AgentID"):
             sorted_group = group.sort_values("Step")
             if len(sorted_group) > 1:
-                first_vector = sorted_group.iloc[0]["vector"]
-                last_vector = sorted_group.iloc[-1]["vector"]
+                first_vector = string_to_array(sorted_group.iloc[0]["vector"])
+                last_vector = string_to_array(sorted_group.iloc[-1]["vector"])
                 diff = cosine_similarity(first_vector, last_vector)[0][0]
                 result_data.append({"AgentID": agent_id, "vector_diff": diff})
         return pd.DataFrame(result_data)
