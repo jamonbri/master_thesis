@@ -164,7 +164,7 @@ class RecommenderSystemModel(mesa.Model):
         """
         for i in range(self.steps):
             self.step()
-            print(f"Step {i + 1} executed.")
+            print(f"Step {i + 1}/{self.steps} executed.", end="\r")
         self.csv_filepaths.extend(
             self.results.store(prefix="run", data=[("raw", self.get_raw_df())])
         )
