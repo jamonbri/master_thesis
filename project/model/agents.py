@@ -151,6 +151,7 @@ class UserAgent(mesa.Agent):
         Args:
             recs: dictionary of recommendations
         """
+        recs = {k: v for k, v in recs.items() if k not in self.books and k not in self.books_consumed}
         books = list(recs.keys())
         probabilities = list(recs.values())
         choice = random.choices(books, weights=probabilities, k=1)[0]

@@ -53,7 +53,7 @@ class Results:
                 path = os.path.join(self.path, filepath)
             d[1].to_csv(path)
             filepaths.append(path)
-            print(f"df {d[0]} stored")
+            print(f"\ndf {d[0]} stored")
         return filepaths
     
     def load(self, filename: str) -> pd.DataFrame:

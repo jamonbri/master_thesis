@@ -210,7 +210,11 @@ def calculate_book_score(row: pd.Series, df_items: pd.DataFrame) -> dict:
     books = {}
     user_vector = row["vector"]
     for book_id in row["book_id"]:
-        item_vector = df_items[df_items.index == book_id]["vector"].item()
-        similarity = cosine_similarity(user_vector, item_vector)
-        books.update({book_id: similarity[0][0]})
+        item = df_items[df_items.index == book_id]
+        if item["priority"].item() > 0:
+            books.update({book_id: item["priority"].item()})
+        else:
+            item_vector = item["vector"].item()
+            similarity = cosine_similarity(user_vector, item_vector)
+            books.update({book_id: similarity[0][0]})
     return books
