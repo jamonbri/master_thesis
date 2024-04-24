@@ -147,7 +147,7 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
     print(f"    - Items dataframe ready. Items: {len(items_df)}")
     return items_df
 
-def calculate_priority(row: pd.Series, priority: str | None = None) -> float:
+def calculate_priority(row: pd.Series, priority: str | float | None = None) -> float:
     """
     Calculate priority column for items
     
@@ -159,8 +159,8 @@ def calculate_priority(row: pd.Series, priority: str | None = None) -> float:
     categories = get_categories()
     if not priority:
         return 0
-    elif priority == "random":
-        return float(np.random.random() > 0.5)
+    elif isinstance(priority, float):
+        return float(np.random.random() < priority)
     elif priority in categories:
         cat_index = categories.index(priority)
         max_value = np.max(row["vector"])

@@ -186,15 +186,15 @@ class UserAgent(mesa.Agent):
         Single step of user agent
         """
         # Should agent get recommendations?
-        if random.random() > self.get_recommendation_probability():
+        if random.random() < self.get_recommendation_probability():
             most_similar_agent = self.find_most_similar_agent()
             recs = most_similar_agent.get_recommendations()
             # Should agent read book?
-            if random.random() > self.get_read_probability():
+            if random.random() < self.get_read_probability():
                 book = self.pick_choice(recs)
                 similarity = self.update(book)
                 # Should agent review book?
-                if random.random() > self.get_review_probability():
+                if random.random() < self.get_review_probability():
                     review = round(similarity * 5) / 5
                 else:
                     review = None
