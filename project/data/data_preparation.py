@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn.metrics.pairwise import cosine_similarity
+from utils import divide_into_three
 
 def get_categories() -> list[str]:
     """
@@ -48,6 +49,7 @@ def load_data(
 def get_model_df(
     n_users: int | None = None, 
     sample_users: int = 100, 
+    thresholds: tuple[int, int] = [5, 20],
     dummy: bool = False, 
     seed: int | None = None
 ) -> pd.DataFrame:
@@ -77,8 +79,7 @@ def get_model_df(
     # Load all users data
     
     df_users_raw = load_data(f"{file_path}/goodreads_interactions.csv", n_users)
-    user_ids_sample = df_users_raw["user_id"].sample(n=sample_users, random_state=seed)
-    df_users_filtered = df_users_raw.loc[df_users_raw["user_id"].isin(user_ids_sample)]
+    df_users_filtered = process_df_users_raw(df=df_users_raw, n_users=sample_users, seed=seed, thresholds=thresholds)
     print("    - Users loaded")
 
     # Normalize rating
@@ -105,6 +106,31 @@ def get_model_df(
     df_combined = pd.merge(df_users_filtered, df_items_result, how="inner", on="book_id")
     print(f"    - Model dataframe ready. Interactions: {len(df_combined)}")
     return df_combined.drop("genres", axis=1)
+
+def process_df_users_raw(df: pd.DataFrame, n_users: int, seed: int | None, thresholds: tuple[int, int]) -> pd.DataFrame:
+    # Filter to read-only entries
+    read_only_df = df[df["is_read"] == 1]
+
+    # Count books per user and filter users with up to 50 books
+    tmp_df = read_only_df.groupby("user_id")["book_id"].count().reset_index().rename(columns={"book_id": "book_count"})
+    user_ids = tmp_df[tmp_df["book_count"] <= 50]["user_id"].tolist()
+    filtered_df = df[df["user_id"].isin(user_ids)]
+    filtered_df = filtered_df.merge(tmp_df, on="user_id", how="left")
+
+    # Divide users into three groups
+    divisions = divide_into_three(n_users)
+
+    # Sample from each user group
+    low_df_user_ids = filtered_df[filtered_df["book_count"] <= thresholds[0]]["user_id"].sample(n=divisions[0], random_state=seed)
+    mid_df_user_ids = filtered_df[(filtered_df["book_count"] <= thresholds[1]) & (filtered_df["book_count"] > thresholds[0])]["user_id"].sample(n=divisions[1], random_state=seed)
+    high_df_user_ids = filtered_df[filtered_df["book_count"] > thresholds[1]]["user_id"].sample(n=divisions[2], random_state=seed)
+
+    # Concatenate samples into one DataFrame
+    low_df = filtered_df[filtered_df["user_id"].isin(low_df_user_ids)]
+    mid_df = filtered_df[filtered_df["user_id"].isin(mid_df_user_ids)]
+    high_df = filtered_df[filtered_df["user_id"].isin(high_df_user_ids)]
+
+    return pd.concat([low_df, mid_df, high_df])
 
 def reformat_dict(d: dict) -> dict:
     """

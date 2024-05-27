@@ -5,6 +5,16 @@ import os
 from typing import Any
 
 
+def divide_into_three(n: int) -> tuple[int, int, int]:
+    part = n // 3
+    remainder = n % 3
+    if remainder == 0:
+        return (part, part, part)
+    elif remainder == 1:
+        return (part + 1, part, part)
+    else:  
+        return (part + 1, part + 1, part)
+
 def string_to_array(s):
     s = s.strip("[]")
     s = s.split()
