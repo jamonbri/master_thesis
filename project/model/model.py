@@ -63,7 +63,8 @@ class RecommenderSystemModel(mesa.Model):
         steps: int = 1,
         priority: str | None = None,
         dummy: bool = False,
-        seed: int | None = None
+        seed: int | None = None,
+        thresholds: tuple[int, int, int] = [5, 20, 50]
     ):
         """
         Create a new recommender system model instance
@@ -90,15 +91,14 @@ class RecommenderSystemModel(mesa.Model):
             raise Exception("At least 2 users expected.")
         
         # Model dataframe extraction
-        df = get_model_df(sample_users=n_users, dummy=dummy, seed=seed)
-        len_df = len(df)
+        df = get_model_df(sample_users=n_users, dummy=dummy, seed=seed, thresholds=thresholds)
         
         # Items dataframe extraction
-        df_items = get_items_df(df, self.priority)
+        df_items = get_items_df(df=df, priority=self.priority)
         len_df_items = len(df_items)
         
         # Users dataframe extraction
-        df_users = get_users_df(df, df_items)
+        df_users = get_users_df(df=df, df_items=df_items, thresholds=thresholds, steps=self.steps)
         len_df_users = len(df_users)
         
         # User agents creation
