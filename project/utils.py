@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from typing import Any
+from data.data_preparation import get_categories
 
 
 def divide_into_three(n: int) -> tuple[int, int, int]:
@@ -74,3 +75,14 @@ def normalize_vector(vector: np.ndarray | str, as_percentage: bool = False) -> n
     percentage = 100 if as_percentage else 1
     result = vector * percentage / total_sum if total_sum > 0 else 0
     return result
+
+def plot_book_distribution_by_genre(df: pd.DataFrame) -> None:
+    df["normalized_vector"] = df["vector"].apply(normalize_vector)
+    df["max_position"] = df["normalized_vector"].apply(lambda x: np.argmax(x))
+    max_values = df["max_position"].value_counts().reindex(range(0, 15), fill_value=0)
+    plt.figure(figsize=(10, 6))
+    plt.bar(get_categories(), max_values, color="blue")
+    plt.xlabel("Genres")
+    plt.ylabel("Count of Books")
+    plt.xticks(rotation=45)
+    plt.show()

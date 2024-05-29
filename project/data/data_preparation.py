@@ -49,7 +49,7 @@ def load_data(
 def get_model_df(
     n_users: int | None = None, 
     sample_users: int = 100, 
-    thresholds: tuple[int, int] = [5, 20],
+    thresholds: tuple[int, int, int] = [5, 20, 50],
     dummy: bool = False, 
     seed: int | None = None
 ) -> pd.DataFrame:
@@ -76,10 +76,17 @@ def get_model_df(
         print("Dummy data read")
         return pd.read_csv(f"{file_path}/goodreads_interactions_sample.csv", index_col="index")
     
+    # Load all items data
+
+    df_items_raw = load_data(f"{file_path}/goodreads_book_genres_initial.json", None)
+    df_items_non_empty = df_items_raw[df_items_raw["genres"].apply(lambda x: bool(x))]
+    books = df_items_non_empty["book_id"]
+    
     # Load all users data
     
     df_users_raw = load_data(f"{file_path}/goodreads_interactions.csv", n_users)
-    df_users_filtered = process_df_users_raw(df=df_users_raw, n_users=sample_users, seed=seed, thresholds=thresholds)
+    df_users_with_books = df_users_raw[df_users_raw["book_id"].isin(books)]
+    df_users_filtered = process_df_users_raw(df=df_users_with_books, n_users=sample_users, seed=seed, thresholds=thresholds)
     print("    - Users loaded")
 
     # Normalize rating
@@ -87,12 +94,10 @@ def get_model_df(
     df_users_filtered.loc[:, "rating"] = df_users_filtered["rating"].astype("float")
     df_users_filtered.loc[:, "rating"] = df_users_filtered["rating"] / 5.0
     
-    # Load all items data
+    # Filter items data
 
-    df_items_raw = load_data(f"{file_path}/goodreads_book_genres_initial.json", None)
     unique_item_ids = df_users_filtered["book_id"].unique().tolist()
-    df_items_filtered = df_items_raw.loc[df_items_raw["book_id"].isin(unique_item_ids)]
-    df_items_filtered = df_items_filtered[df_items_filtered["genres"].apply(lambda x: bool(x))]
+    df_items_filtered = df_items_non_empty.loc[df_items_non_empty["book_id"].isin(unique_item_ids)]
     print("    - Items loaded")
     
     # Get categories into columns
@@ -107,13 +112,13 @@ def get_model_df(
     print(f"    - Model dataframe ready. Interactions: {len(df_combined)}")
     return df_combined.drop("genres", axis=1)
 
-def process_df_users_raw(df: pd.DataFrame, n_users: int, seed: int | None, thresholds: tuple[int, int]) -> pd.DataFrame:
+def process_df_users_raw(df: pd.DataFrame, n_users: int, seed: int | None, thresholds: tuple[int, int, int]) -> pd.DataFrame:
     # Filter to read-only entries
     read_only_df = df[df["is_read"] == 1]
 
-    # Count books per user and filter users with up to 50 books
+    # Count books per user and filter users with up to top threshold books
     tmp_df = read_only_df.groupby("user_id")["book_id"].count().reset_index().rename(columns={"book_id": "book_count"})
-    user_ids = tmp_df[tmp_df["book_count"] <= 50]["user_id"].tolist()
+    user_ids = tmp_df[tmp_df["book_count"] <= thresholds[2]]["user_id"].tolist()
     filtered_df = df[df["user_id"].isin(user_ids)]
     filtered_df = filtered_df.merge(tmp_df, on="user_id", how="left")
 
@@ -121,14 +126,17 @@ def process_df_users_raw(df: pd.DataFrame, n_users: int, seed: int | None, thres
     divisions = divide_into_three(n_users)
 
     # Sample from each user group
-    low_df_user_ids = filtered_df[filtered_df["book_count"] <= thresholds[0]]["user_id"].sample(n=divisions[0], random_state=seed)
-    mid_df_user_ids = filtered_df[(filtered_df["book_count"] <= thresholds[1]) & (filtered_df["book_count"] > thresholds[0])]["user_id"].sample(n=divisions[1], random_state=seed)
-    high_df_user_ids = filtered_df[filtered_df["book_count"] > thresholds[1]]["user_id"].sample(n=divisions[2], random_state=seed)
+    low_df_user_ids = filtered_df[filtered_df["book_count"] <= thresholds[0]]
+    low_user_ids = low_df_user_ids["user_id"].drop_duplicates().sample(n=divisions[0], random_state=seed)
+    mid_df_user_ids = filtered_df[(filtered_df["book_count"] <= thresholds[1]) & (filtered_df["book_count"] > thresholds[0])]
+    mid_user_ids = mid_df_user_ids["user_id"].drop_duplicates().sample(n=divisions[1], random_state=seed)
+    high_df_user_ids = filtered_df[filtered_df["book_count"] > thresholds[1]]
+    high_user_ids = high_df_user_ids["user_id"].drop_duplicates().sample(n=divisions[2], random_state=seed)
 
     # Concatenate samples into one DataFrame
-    low_df = filtered_df[filtered_df["user_id"].isin(low_df_user_ids)]
-    mid_df = filtered_df[filtered_df["user_id"].isin(mid_df_user_ids)]
-    high_df = filtered_df[filtered_df["user_id"].isin(high_df_user_ids)]
+    low_df = filtered_df[filtered_df["user_id"].isin(low_user_ids)]
+    mid_df = filtered_df[filtered_df["user_id"].isin(mid_user_ids)]
+    high_df = filtered_df[filtered_df["user_id"].isin(high_user_ids)]
 
     return pd.concat([low_df, mid_df, high_df])
 
@@ -193,13 +201,15 @@ def calculate_priority(row: pd.Series, priority: str | float | None = None) -> f
         max_indices = np.where(row["vector"] == max_value)[1]
         return float(cat_index in max_indices and not np.all(row["vector"] == 0))
 
-def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame) -> pd.DataFrame:
+def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame, steps: int, thresholds: tuple[int, int, int]) -> pd.DataFrame:
     """
     Get aggregated users df
     
     Args: 
         df: interactions dataframe
         df_items: items dataframe
+        steps: steps in simulation
+        thresholds: books per year limit for low-mid and mid-high reader personas 
     """
     
     print("Getting users dataframe...")
@@ -214,15 +224,31 @@ def get_users_df(df: pd.DataFrame, df_items: pd.DataFrame) -> pd.DataFrame:
         "book_id": lambda x: list(x)
     }
     aggregations.update({k: "sum" for k in cat_cols})
+    
+    # Calculate probabilities of reading for each user
+
+    low_readers_average = thresholds[0] / 2
+    mid_readers_average = (thresholds[1] - thresholds[0]) / 2 + thresholds[0]
+    high_readers_average = (thresholds[2] - thresholds[1]) / 2 + thresholds[1]
+    low_readers_proba = round(low_readers_average / steps, 4)
+    mid_readers_proba = round(mid_readers_average / steps, 4)
+    high_readers_proba = round(high_readers_average / steps, 4)
+
     users_df = tmp_df.groupby(by=["user_id"]).agg(aggregations)
     users_df["vector"] = users_df.apply(lambda row: np.array(row[cat_cols]).reshape(1, -1), axis=1)
     users_df = users_df.drop(cat_cols, axis=1)
     users_df["book_id"] = users_df.apply(calculate_book_score, args=(df_items,), axis=1)
-    users_df["book_id_length"] = users_df["book_id"].apply(len)
-    max_book_list = users_df["book_id_length"].max()
-    users_df["rec_proba"] = users_df["book_id_length"] / max_book_list
+    users_df["read_proba"] = np.where(
+        users_df["is_read"] <= thresholds[0], 
+        low_readers_proba, 
+        np.where(
+            users_df["is_read"] <= thresholds[1], 
+            mid_readers_proba, 
+            high_readers_proba
+        )
+    )
     print(f"    - Users dataframe ready. Users: {len(users_df)}")
-    return users_df.drop("book_id_length", axis=1)
+    return users_df
 
 def calculate_book_score(row: pd.Series, df_items: pd.DataFrame) -> dict:
     """

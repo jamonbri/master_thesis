@@ -81,20 +81,14 @@ class UserAgent(mesa.Agent):
         self.mean_rating = user_row["rating"]
         self.n_books = user_row["is_read"]
         self.vector = user_row["vector"]
-        self.rec_proba = user_row["rec_proba"]
-        self.books_consumed = []
-
-    def get_recommendation_probability(self) -> float:
-        """
-        Get probability of getting a recommendation
-        """
-        return self.rec_proba    
+        self.read_proba = user_row["read_proba"]
+        self.books_consumed = [] 
     
     def get_read_probability(self) -> float:
         """
         Calculate read probability as proportion of read books from total interacted
         """
-        return self.n_books / len(self.books)
+        return self.read_proba
 
     def get_review_probability(self) -> float:
         """
@@ -187,17 +181,15 @@ class UserAgent(mesa.Agent):
         Single step of user agent
         """
         # Should agent get recommendations?
-        if random.random() < self.get_recommendation_probability():
+        if random.random() < self.get_read_probability():
             most_similar_agent = self.find_most_similar_agent()
             recs = most_similar_agent.get_recommendations()
-            # Should agent read book?
-            if random.random() < self.get_read_probability():
-                book = self.pick_choice(recs)
-                similarity = self.update(book)
-                # Should agent review book?
-                if random.random() < self.get_review_probability():
-                    review = round(similarity * 5) / 5
-                else:
-                    review = None
-                book.update(review)
+            book = self.pick_choice(recs)
+            similarity = self.update(book)
+            # Should agent review book?
+            if random.random() < self.get_review_probability():
+                review = round(similarity * 5) / 5
+            else:
+                review = None
+            book.update(review)
     
