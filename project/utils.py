@@ -3,8 +3,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from typing import Any
-from data.data_preparation import get_categories
+import ast
+from sklearn.metrics.pairwise import cosine_similarity
 
+def get_categories() -> list[str]:
+    """
+    Return list of categories
+    """
+    return [
+        "fantasy", 
+        "non_fiction", 
+        "mystery", 
+        "young_adult",
+        "graphic",
+        "thriller",
+        "paranormal",
+        "romance",
+        "history",
+        "biography",
+        "historical_fiction",
+        "comics",
+        "poetry",
+        "crime",
+        "children",
+        "fiction"
+    ]
 
 def divide_into_three(n: int) -> tuple[int, int, int]:
     part = n // 3
@@ -20,6 +43,9 @@ def string_to_array(s):
     s = s.strip("[]")
     s = s.split()
     return np.array([float(x) for x in s]).reshape(1, -1)
+
+def string_to_dict(s):
+    return ast.literal_eval(s)
 
 def plot_agent_vector(df: pd.DataFrame, agent_id: int) -> None:
     filtered_df = df.xs(agent_id, level=1)
@@ -76,6 +102,15 @@ def normalize_vector(vector: np.ndarray | str, as_percentage: bool = False) -> n
     result = vector * percentage / total_sum if total_sum > 0 else 0
     return result
 
+def unit_normalize_vector(v: np.ndarray) -> np.array:
+    """
+    Unit vector normalization
+    """
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
+
 def plot_book_distribution_by_genre(df: pd.DataFrame) -> None:
     df["normalized_vector"] = df["vector"].apply(normalize_vector)
     df["max_position"] = df["normalized_vector"].apply(lambda x: np.argmax(x))
@@ -86,3 +121,23 @@ def plot_book_distribution_by_genre(df: pd.DataFrame) -> None:
     plt.ylabel("Count of Books")
     plt.xticks(rotation=45)
     plt.show()
+
+def get_vector_diff_df(filename: str) -> pd.DataFrame:
+    """
+    Get vector differences dataframeas cosine similarity between first 
+    and last vector of each agent
+
+    Args:
+        filename: path of CSV file
+    """
+    df = pd.read_csv(filename)
+    filtered_df = df[df["agent_type"] == "UserAgent"][["AgentID", "Step", "vector"]]
+    result_data = []
+    for agent_id, group in filtered_df.groupby("AgentID"):
+        sorted_group = group.sort_values("Step")
+        if len(sorted_group) > 1:
+            first_vector = string_to_array(sorted_group.iloc[0]["vector"])
+            last_vector = string_to_array(sorted_group.iloc[-1]["vector"])
+            diff = cosine_similarity(first_vector, last_vector)[0][0]
+            result_data.append({"AgentID": agent_id, "vector_diff": diff})
+    return pd.DataFrame(result_data)

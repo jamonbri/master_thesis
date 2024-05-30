@@ -1,8 +1,6 @@
 import pandas as pd
 import os
 from datetime import date
-from sklearn.metrics.pairwise import cosine_similarity
-from utils import string_to_array
 
 class Results:
     """
@@ -55,34 +53,3 @@ class Results:
             filepaths.append(path)
             print(f"\ndf {d[0]} stored")
         return filepaths
-    
-    def load(self, filename: str) -> pd.DataFrame:
-        """
-        Helper method to load a dataframe in order to avoid setting large dataframes
-        as part of the model class attributes
-
-        Args:
-            filename: path of CSV file
-        """
-        df = pd.read_csv(filename)
-        return df
-
-    def get_vector_diff_df(self, filename: str) -> pd.DataFrame:
-        """
-        Get vector differences dataframeas cosine similarity between first 
-        and last vector of each agent
-
-        Args:
-            filename: path of CSV file
-        """
-        df = self.load(filename)
-        filtered_df = df[df["agent_type"] == "UserAgent"][["AgentID", "Step", "vector"]]
-        result_data = []
-        for agent_id, group in filtered_df.groupby("AgentID"):
-            sorted_group = group.sort_values("Step")
-            if len(sorted_group) > 1:
-                first_vector = string_to_array(sorted_group.iloc[0]["vector"])
-                last_vector = string_to_array(sorted_group.iloc[-1]["vector"])
-                diff = cosine_similarity(first_vector, last_vector)[0][0]
-                result_data.append({"AgentID": agent_id, "vector_diff": diff})
-        return pd.DataFrame(result_data)

@@ -3,8 +3,8 @@ import mesa
 import pandas as pd
 import numpy as np
 import random
-from data.data_preparation import calculate_book_score
 from sklearn.metrics.pairwise import cosine_similarity
+from utils import unit_normalize_vector
 
 class ItemAgent(mesa.Agent):
     """
@@ -82,6 +82,9 @@ class UserAgent(mesa.Agent):
         self.n_books = user_row["is_read"]
         self.vector = user_row["vector"]
         self.read_proba = user_row["read_proba"]
+        self.ignorant = user_row["ignorant"]
+        self.similarities = user_row["similarities"]
+        self.should_update_similarities = False
         self.books_consumed = [] 
     
     def get_read_probability(self) -> float:
@@ -95,12 +98,6 @@ class UserAgent(mesa.Agent):
         Calculate review probability as proportion of reviewed books from total read
         """
         return self.n_reviews / self.n_books if self.n_books else 0
-    
-    def normalize_vector(self) -> np.array:
-        """
-        Normalize vector between 0 and 1
-        """
-        return (self.vector - self.vector.min()) / (self.vector.max() - self.vector.min())
 
     def calculate_cosine_similarity(self, agent_b: UserAgent | ItemAgent) -> np.ndarray:
         """
@@ -122,19 +119,19 @@ class UserAgent(mesa.Agent):
                     most_similar_agent = other_agent
         return most_similar_agent
 
-    def get_recommendations(self, n: int = 100, alpha: float = 2) -> dict:
+    def get_recommendations(self, n) -> dict:
         """
-        Get item recommendations from most similar agent's book list as dict with item ID and probability
+        Get item recommendations as dict with item ID and probability
 
         Args:
             n: number of recommendations
-            alpha: parameter for inverse exponential. The higher the less skewed towards the top values
         """
+        alpha = 2 if self.ignorant else 1.2
         recs = {}
         rec_list = self.get_top_books(n)
         for idx, rec in enumerate(rec_list):
             # Calculate probability as inverse exponential 
-            prob = (alpha - 1) * (alpha ** (-idx - 1))
+            prob = (alpha - 1) * (alpha ** (-idx - 1))  # -1 added because the enumerate starts at 0
             recs.update({rec: prob})
         return recs
 
@@ -149,19 +146,45 @@ class UserAgent(mesa.Agent):
         books = list(recs.keys())
         probabilities = list(recs.values())
         choice = random.choices(books, weights=probabilities, k=1)[0]
-        item = [i for i in self.model.schedule.agents if isinstance(i, ItemAgent) and i.book_id == choice]
+        item = [i for i in self.model.get_agents_of_type(ItemAgent) if i.book_id == choice]
         return item[0]
 
-    def get_top_books(self, n_books: int = 100) -> list[int]:
+    def get_top_books(self, n_books) -> list[int]:
         """
-        Get the top books by vector similarity with agent
+        Get the top books by vector similarity with agent or all items
 
         Args:
             n_books: number of books to return
+            all: boolean if the books should be compared to agent (False) or all items (True)
         """
-        sorted_items = sorted(self.books.items(), key=lambda x: x[1], reverse=True)
-        return [item[0] for item in sorted_items[:n_books]]
+        if self.model.rec_engine == "content-based":
+            if not self.should_update_similarities:
+                return list(self.similarities.keys())
+            return self.update_similarities(n_books)
+        elif self.model.rec_engine == "collaborative-filtering":
+            most_similar_agent = self.find_most_similar_agent()
+            items = most_similar_agent.books
+            sorted_items = sorted(items.items(), key=lambda x: x[1], reverse=True)
+            return [item[0] for item in sorted_items[:n_books]]
 
+    def update_similarities(self, n_books) -> list[int]:
+        """
+        Updates cosine similarities for user given all items and returns top n
+
+        Args:
+            n: number of items to return
+        """
+        items = self.model.get_agents_of_type(ItemAgent)
+        items_matrix = np.array([book.vector.flatten() for book in items])
+        items_matrix = np.array([unit_normalize_vector(v) for v in items_matrix])
+        vector = unit_normalize_vector(self.vector.flatten())
+        similarities = np.dot(items_matrix, vector)
+        results = {item.book_id: cosine_sim for item, cosine_sim in zip(items, similarities)}
+        sorted_items = sorted(results.items(), key=lambda x: x[1], reverse=True)
+        self.similarities = sorted_items[:n_books]
+        self.should_update_similarities = False
+        return [item[0] for item in sorted_items[:n_books]]
+    
     def update(self, item: ItemAgent) -> float:
         """
         Update user agent after interaction with item
@@ -174,6 +197,7 @@ class UserAgent(mesa.Agent):
         similarity = self.calculate_cosine_similarity(item)
         self.books.update({item.book_id: similarity[0][0]})
         self.books_consumed.append(item.book_id)
+        self.should_update_similarities = True
         return similarity[0][0]
     
     def step(self) -> None:
@@ -182,8 +206,7 @@ class UserAgent(mesa.Agent):
         """
         # Should agent get recommendations?
         if random.random() < self.get_read_probability():
-            most_similar_agent = self.find_most_similar_agent()
-            recs = most_similar_agent.get_recommendations()
+            recs = self.get_recommendations(self.model.n_recs)
             book = self.pick_choice(recs)
             similarity = self.update(book)
             # Should agent review book?

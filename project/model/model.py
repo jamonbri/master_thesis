@@ -64,7 +64,14 @@ class RecommenderSystemModel(mesa.Model):
         priority: str | None = None,
         dummy: bool = False,
         seed: int | None = None,
-        thresholds: tuple[int, int, int] = [5, 20, 50]
+        thresholds: tuple[int, int, int] = [5, 20, 50],
+        ignorant_proportion: float = 0.0,
+        rec_engine: str = "content-based",
+        df: pd.DataFrame = pd.DataFrame(),
+        df_items: pd.DataFrame = pd.DataFrame(),
+        df_users: pd.DataFrame = pd.DataFrame(),
+        initial_store_path: list[str] | None = None,
+        n_recs: int = 50
     ):
         """
         Create a new recommender system model instance
@@ -75,6 +82,13 @@ class RecommenderSystemModel(mesa.Model):
             priority: item priority for hidden agenda
             dummy: use of pre-loaded data for faster data loading
             seed: random state seed for sampling users
+            thresholds: book limit thresholds for low-mid and mid-high reader personas
+            ignorant_proportion: proportion of users that are ignorant to the intentions of algorithm
+            rec_engine: type of RS ('content-based' or 'collaborative-filtering')
+            df: model df if already loaded
+            df_items: items df if already loaded
+            df_users: users df if already loaded
+            initial_store_path: path to preloaded files or None to store new files
         """
         
         # Model initialization
@@ -85,20 +99,27 @@ class RecommenderSystemModel(mesa.Model):
         self.steps = steps
         self.priority = priority
         self.csv_filepaths = []
+        self.rec_engine = rec_engine
+        self.n_recs = n_recs
 
         # Check at least 2 users
         if self.num_users < 2:
             raise Exception("At least 2 users expected.")
         
         # Model dataframe extraction
-        df = get_model_df(sample_users=n_users, dummy=dummy, seed=seed, thresholds=thresholds)
+        if df.empty:
+            df = get_model_df(
+                sample_users=n_users, dummy=dummy, seed=seed, thresholds=thresholds, ignorant_proportion=ignorant_proportion
+            )
         
         # Items dataframe extraction
-        df_items = get_items_df(df=df, priority=self.priority)
+        if df_items.empty:
+            df_items = get_items_df(df=df, priority=self.priority)
         len_df_items = len(df_items)
         
         # Users dataframe extraction
-        df_users = get_users_df(df=df, df_items=df_items, thresholds=thresholds, steps=self.steps)
+        if df_users.empty:
+            df_users = get_users_df(df=df, df_items=df_items, thresholds=thresholds, steps=self.steps, n_recs=self.n_recs)
         len_df_users = len(df_users)
         
         # User agents creation
@@ -132,12 +153,15 @@ class RecommenderSystemModel(mesa.Model):
 
         # Create results folder
         self.results = Results()
-        self.results.create_new_directory()
-        self.csv_filepaths.extend(
-            self.results.store(
-                prefix="initial", data=[("interactions", df), ("items", df_items), ("users", df_users)]
+        if not initial_store_path:
+            self.results.create_new_directory()
+            self.csv_filepaths.extend(
+                self.results.store(
+                    prefix="initial", data=[("interactions", df), ("items", df_items), ("users", df_users)]
+                )
             )
-        )
+        else:
+            self.results.path = initial_store_path
 
     def step(self) -> None:
         """
