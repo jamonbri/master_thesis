@@ -71,7 +71,8 @@ class RecommenderSystemModel(mesa.Model):
         df_items: pd.DataFrame = pd.DataFrame(),
         df_users: pd.DataFrame = pd.DataFrame(),
         initial_store_path: list[str] | None = None,
-        n_recs: int = 50
+        n_recs: int = 50,
+        social_influence: bool = False
     ):
         """
         Create a new recommender system model instance
@@ -89,6 +90,8 @@ class RecommenderSystemModel(mesa.Model):
             df_items: items df if already loaded
             df_users: users df if already loaded
             initial_store_path: path to preloaded files or None to store new files
+            n_recs: number of recommendations to return 
+            social_influence: whether recommendations can be prioritized based on social influence
         """
         
         # Model initialization
@@ -101,6 +104,7 @@ class RecommenderSystemModel(mesa.Model):
         self.csv_filepaths = []
         self.rec_engine = rec_engine
         self.n_recs = n_recs
+        self.social_influence = social_influence
 
         # Check at least 2 users
         if self.num_users < 2:

@@ -86,6 +86,7 @@ class UserAgent(mesa.Agent):
         self.similarities = user_row["similarities"]
         self.should_update_similarities = False
         self.books_consumed = [] 
+        self.following = user_row["following"] or []
     
     def get_read_probability(self) -> float:
         """
@@ -128,12 +129,27 @@ class UserAgent(mesa.Agent):
         """
         alpha = 2 if self.ignorant else 1.2
         recs = {}
-        rec_list = self.get_top_books(n)
+        social_influence_books = self.get_social_influence_books()
+        top_books = self.get_top_books(n - len(social_influence_books))
+        rec_list = social_influence_books[:]
+        rec_list.extend(book for book in top_books if book not in rec_list)
         for idx, rec in enumerate(rec_list):
             # Calculate probability as inverse exponential 
             prob = (alpha - 1) * (alpha ** (-idx - 1))  # -1 added because the enumerate starts at 0
             recs.update({rec: prob})
         return recs
+
+    def get_social_influence_books(self) -> list[int]:
+        """
+        Get list of books from social influencers
+        """
+        if not self.model.social_influence:
+            return []
+        rec_list = []
+        for user_id in self.following:
+            agent = [agent for agent in self.model.get_agents_of_type(UserAgent) if agent.user_id == user_id]
+            rec_list.extend(book for book in agent[0].books_consumed if book not in rec_list)
+        return rec_list
 
     def pick_choice(self, recs: dict) -> ItemAgent:
         """
@@ -179,7 +195,7 @@ class UserAgent(mesa.Agent):
         items_matrix = np.array([unit_normalize_vector(v) for v in items_matrix])
         vector = unit_normalize_vector(self.vector.flatten())
         similarities = np.dot(items_matrix, vector)
-        results = {item.book_id: cosine_sim for item, cosine_sim in zip(items, similarities)}
+        results = {item.book_id: round(cosine_sim, 4) for item, cosine_sim in zip(items, similarities)}
         sorted_items = sorted(results.items(), key=lambda x: x[1], reverse=True)
         self.similarities = sorted_items[:n_books]
         self.should_update_similarities = False

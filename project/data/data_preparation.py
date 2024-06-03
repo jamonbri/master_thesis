@@ -206,7 +206,8 @@ def get_users_df(
     df_items: pd.DataFrame, 
     steps: int, 
     thresholds: tuple[int, int, int],
-    n_recs: int
+    n_recs: int,
+    social_influence: bool
 ) -> pd.DataFrame:
     """
     Get aggregated users df
@@ -216,6 +217,8 @@ def get_users_df(
         df_items: items dataframe
         steps: steps in simulation
         thresholds: books per year limit for low-mid and mid-high reader personas 
+        n_recs: number of recommendations
+        social_influence: boolean to toggle on social influence
     """
     
     print("Getting users dataframe...")
@@ -258,12 +261,17 @@ def get_users_df(
         users_df = matrix_cosine_similarity(users_df, df_items, n_recs)
     else:
         users_df["similarities"] = None
+
+    if social_influence:
+        users_df = get_social_influences(users_df)
+    else:
+        users_df["following"] = None
     print(f"    - Users dataframe ready. Users: {len(users_df)}")
     return users_df
 
-def matrix_cosine_similarity(df_reference: pd.DataFrame, df_compare: pd.DataFrame, n: int = 50) -> dict:
+def matrix_cosine_similarity(df_reference: pd.DataFrame, df_compare: pd.DataFrame, n: int = 50) -> pd.DataFrame:
     """Calculates cosine similarity between each vector of df_reference and all
-    vectors of df_compare via matrix multiplication
+    vectors of df_compare via matrix multiplication. Simulates a 'cache' to avoid over-computations
     
     Args:
         df_reference: reference df
@@ -285,11 +293,29 @@ def matrix_cosine_similarity(df_reference: pd.DataFrame, df_compare: pd.DataFram
     # Add similarities as column to reference df
     
     df_reference["similarities"] = [
-        dict(sorted({df_compare.index[j]: similarities[i, j] for j in range(len(df_compare))}.items(),
+        dict(sorted({df_compare.index[j]: round(similarities[i, j], 4) for j in range(len(df_compare))}.items(),
             key=lambda item: item[1], reverse=True)[:n])
         for i in range(len(df_reference))
     ]
     return df_reference
+
+def get_social_influences(df: pd.DataFrame, top_k: int = 5) -> pd.DataFrame:
+    """Get users to follow based on cosine similarity between them
+    
+    Args:
+        df: users df
+        top_k: number of users to return as top    
+    """
+    vectors = np.stack(df["vector"].apply(lambda x: np.reshape(x, (1, -1))).values)
+    vectors = vectors.reshape(150, 16)
+    similarity_matrix = cosine_similarity(vectors)
+    sim_df = pd.DataFrame(similarity_matrix, index=df.index, columns=df.index)
+
+    def find_top_5_similar(user_id: int) -> list[int]:
+        return sim_df.loc[user_id].drop(user_id).nlargest(top_k).index.tolist()
+
+    df["following"] = df.index.map(find_top_5_similar)
+    return df
 
 def calculate_book_score(row: pd.Series, df_items: pd.DataFrame) -> dict:
     """
@@ -309,5 +335,5 @@ def calculate_book_score(row: pd.Series, df_items: pd.DataFrame) -> dict:
         else:
             item_vector = item["vector"].item()
             similarity = cosine_similarity(user_vector, item_vector)
-            books.update({book_id: similarity[0][0]})
+            books.update({book_id: round(similarity[0][0], 4)})
     return books
