@@ -120,22 +120,21 @@ class UserAgent(mesa.Agent):
                     most_similar_agent = other_agent
         return most_similar_agent
 
-    def get_recommendations(self, n) -> dict:
+    def get_recommendations(self, n: int) -> dict:
         """
         Get item recommendations as dict with item ID and probability
 
         Args:
             n: number of recommendations
         """
-        alpha = 2 if self.ignorant else 1.2
+        alpha = 2
         recs = {}
         social_influence_books = self.get_social_influence_books()
         top_books = self.get_top_books(n - len(social_influence_books))
         rec_list = social_influence_books[:]
         rec_list.extend(book for book in top_books if book not in rec_list)
         for idx, rec in enumerate(rec_list):
-            # Calculate probability as inverse exponential 
-            prob = (alpha - 1) * (alpha ** (-idx - 1))  # -1 added because the enumerate starts at 0
+            prob = (alpha - 1) * (alpha ** (-idx - 1))
             recs.update({rec: prob})
         return recs
 
@@ -151,7 +150,7 @@ class UserAgent(mesa.Agent):
             rec_list.extend(book for book in agent[0].books_consumed if book not in rec_list)
         return rec_list
 
-    def pick_choice(self, recs: dict) -> ItemAgent:
+    def pick_choice(self, recs: dict) -> ItemAgent | None:
         """
         Pick choice from dictionary of books and probabilities based on random choice from probabilities
 
@@ -159,6 +158,8 @@ class UserAgent(mesa.Agent):
             recs: dictionary of recommendations
         """
         recs = {k: v for k, v in recs.items() if k not in self.books and k not in self.books_consumed}
+        if not recs:  # there could be a slight chance that the agent can't get more recommendations
+            return
         books = list(recs.keys())
         probabilities = list(recs.values())
         choice = random.choices(books, weights=probabilities, k=1)[0]
@@ -197,7 +198,7 @@ class UserAgent(mesa.Agent):
         similarities = np.dot(items_matrix, vector)
         results = {item.book_id: round(cosine_sim, 4) for item, cosine_sim in zip(items, similarities)}
         sorted_items = sorted(results.items(), key=lambda x: x[1], reverse=True)
-        self.similarities = sorted_items[:n_books]
+        self.similarities = dict(sorted_items[:n_books])
         self.should_update_similarities = False
         return [item[0] for item in sorted_items[:n_books]]
     
@@ -220,12 +221,19 @@ class UserAgent(mesa.Agent):
         """
         Single step of user agent
         """
+        
         # Should agent get recommendations?
+        
         if random.random() < self.get_read_probability():
             recs = self.get_recommendations(self.model.n_recs)
             book = self.pick_choice(recs)
+            if not book:
+                return
+
             similarity = self.update(book)
+            
             # Should agent review book?
+            
             if random.random() < self.get_review_probability():
                 review = round(similarity * 5) / 5
             else:

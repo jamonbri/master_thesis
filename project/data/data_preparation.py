@@ -25,12 +25,12 @@ def load_data(
     return df
 
 def get_model_df(
-    n_users: int | None = None, 
-    sample_users: int = 100, 
+    load_users: int | None = None, 
+    n_users: int = 100, 
     thresholds: tuple[int, int, int] = [5, 20, 50],
     dummy: bool = False, 
     seed: int | None = None,
-    ignorant_proportion: float = 0.0
+    ignorant_proportion: float = 1.0
 ) -> pd.DataFrame:
     """
     Gets general model df with interactions between users and items
@@ -63,10 +63,10 @@ def get_model_df(
     
     # Load all users data
     
-    df_users_raw = load_data(f"{file_path}/goodreads_interactions.csv", n_users)
+    df_users_raw = load_data(f"{file_path}/goodreads_interactions.csv", load_users)
     df_users_with_books = df_users_raw[df_users_raw["book_id"].isin(books)]
     df_users_filtered = process_df_users_raw(
-        df=df_users_with_books, n_users=sample_users, seed=seed, thresholds=thresholds, ignorant_proportion=ignorant_proportion
+        df=df_users_with_books, n_users=n_users, seed=seed, thresholds=thresholds, ignorant_proportion=ignorant_proportion
     )
     print("    - Users loaded")
 
@@ -122,23 +122,48 @@ def process_df_users_raw(
 
     # Concatenate samples into one DataFrame
     low_df = filtered_df[filtered_df["user_id"].isin(low_user_ids)]
+    low_df["persona"] = "low"
     mid_df = filtered_df[filtered_df["user_id"].isin(mid_user_ids)]
+    mid_df["persona"] = "mid"
     high_df = filtered_df[filtered_df["user_id"].isin(high_user_ids)]
+    high_df["persona"] = "high"
 
     # Add ignorance
-    if ignorant_proportion:
+    if ignorant_proportion == 1.0:
         for sub_df in [low_df, mid_df, high_df]:
-            unique_users = sub_df['user_id'].drop_duplicates()
-            shuffled_users = unique_users.sample(frac=1, random_state=seed)
-            half_point = round(len(shuffled_users) * ignorant_proportion)
-            naiveness_map = {user_id: True for user_id in shuffled_users[:half_point]}
-            naiveness_map.update({user_id: False for user_id in shuffled_users[half_point:]})
-            sub_df['ignorant'] = sub_df['user_id'].map(naiveness_map)
+            sub_df['ignorant'] = True
+    elif ignorant_proportion > 0:
+        for sub_df in [low_df, mid_df, high_df]:
+            sub_df['ignorant'] = get_naiveness(sub_df, ignorant_proportion, seed)
     else:
         for sub_df in [low_df, mid_df, high_df]:
             sub_df["ignorant"] = False
 
     return pd.concat([low_df, mid_df, high_df])
+
+def get_naiveness(df: pd.DataFrame, ignorant_proportion: float, seed: int | None) -> pd.Series:
+    """
+    Get users that are naive
+
+    Args:
+        df: users dataframe
+        ignorant_proportion: proportion of naive users
+        seed: random state
+    """
+    if "user_id" in df.columns:
+        unique_users = df['user_id'].drop_duplicates()
+        user_id_col = "user_id"
+    else:
+        unique_users = pd.Series(df.index.drop_duplicates())
+        user_id_col = None
+    shuffled_users = unique_users.sample(frac=1, random_state=seed)
+    half_point = round(len(shuffled_users) * ignorant_proportion)
+    naiveness_map = {user_id: True for user_id in shuffled_users[:half_point]}
+    naiveness_map.update({user_id: False for user_id in shuffled_users[half_point:]})
+    if user_id_col:
+        return df[user_id_col].map(naiveness_map)
+    else:
+        return df.index.map(naiveness_map)
 
 def reformat_dict(d: dict) -> dict:
     """
@@ -156,7 +181,7 @@ def reformat_dict(d: dict) -> dict:
     genres.update({k: 0 for k in get_categories() if k not in genres})
     return genres
 
-def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
+def get_items_df(df: pd.DataFrame, priority: str | None = None, run_type: str = "results") -> pd.DataFrame:
     """
     Get aggregated items df
     
@@ -165,7 +190,8 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
         priority: item priority strategy
     """
     
-    print("Getting items dataframe...")
+    if run_type == "results":
+        print("Getting items dataframe...")
     cat_cols = get_categories()
     aggregations = {
         "is_read": "sum",
@@ -178,7 +204,9 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None) -> pd.DataFrame:
     items_df["vector"] = items_df.apply(lambda row: np.array(row[cat_cols]).reshape(1, -1), axis=1)
     items_df = items_df.drop(cat_cols, axis=1)
     items_df["priority"] = items_df.apply(calculate_priority, args=(priority,), axis=1)
-    print(f"    - Items dataframe ready. Items: {len(items_df)}")
+    
+    if run_type == "results":
+        print(f"    - Items dataframe ready. Items: {len(items_df)}")
     return items_df
 
 def calculate_priority(row: pd.Series, priority: str | float | None = None) -> float:
@@ -207,7 +235,10 @@ def get_users_df(
     steps: int, 
     thresholds: tuple[int, int, int],
     n_recs: int,
-    social_influence: bool
+    social_influence: bool,
+    ignorant_proportion: float,
+    seed: int | None,
+    run_type: str = "results"
 ) -> pd.DataFrame:
     """
     Get aggregated users df
@@ -219,9 +250,11 @@ def get_users_df(
         thresholds: books per year limit for low-mid and mid-high reader personas 
         n_recs: number of recommendations
         social_influence: boolean to toggle on social influence
+        ignorant_proportion: optional calculation of naiveness 
+        seed: random state
     """
-    
-    print("Getting users dataframe...")
+    if run_type == "results":
+        print("Getting users dataframe...")
     tmp_df = df.copy()
     cat_cols = get_categories()
     for col in cat_cols:
@@ -231,7 +264,8 @@ def get_users_df(
         "is_read": "sum",
         "rating": "mean",
         "book_id": lambda x: list(x),
-        "ignorant": "first"
+        "ignorant": "first",
+        "persona": "first"
     }
     aggregations.update({k: "sum" for k in cat_cols})
     
@@ -257,16 +291,30 @@ def get_users_df(
             high_readers_proba
         )
     )
-    if n_recs:
-        users_df = matrix_cosine_similarity(users_df, df_items, n_recs)
-    else:
-        users_df["similarities"] = None
 
     if social_influence:
         users_df = get_social_influences(users_df)
     else:
         users_df["following"] = None
-    print(f"    - Users dataframe ready. Users: {len(users_df)}")
+
+    if ignorant_proportion == 1:
+        users_df["ignorant"] == True
+    elif ignorant_proportion > 0:
+        low_df = users_df[users_df["persona"] == "low"]
+        low_df["ignorant"] = get_naiveness(low_df, ignorant_proportion, seed)
+        mid_df = users_df[users_df["persona"] == "mid"]
+        mid_df["ignorant"] = get_naiveness(mid_df, ignorant_proportion, seed)
+        high_df = users_df[users_df["persona"] == "high"]
+        high_df["ignorant"] = get_naiveness(high_df, ignorant_proportion, seed)
+        users_df = pd.concat([low_df, mid_df, high_df])
+
+    if n_recs:
+        users_df = matrix_cosine_similarity(users_df, df_items, n_recs)
+    else:
+        users_df["similarities"] = None
+        
+    if run_type == "results":
+        print(f"    - Users dataframe ready. Users: {len(users_df)}")
     return users_df
 
 def matrix_cosine_similarity(df_reference: pd.DataFrame, df_compare: pd.DataFrame, n: int = 50) -> pd.DataFrame:
@@ -289,6 +337,15 @@ def matrix_cosine_similarity(df_reference: pd.DataFrame, df_compare: pd.DataFram
     matrix_reference_normalized = matrix_reference / norms_reference[:, np.newaxis]
     matrix_compare_normalized = matrix_compare / norms_compare[:, np.newaxis]
     similarities = np.dot(matrix_reference_normalized, matrix_compare_normalized.T)
+
+    # Override with priority
+
+    priority_indices = np.where(df_compare["priority"] == 1)[0]
+    for idx in priority_indices:
+        ref_indices = np.where(df_reference['ignorant'] == False)[0]
+        non_ignorant_indices = set(range(len(df_reference))) - set(ref_indices)
+        similarities[list(non_ignorant_indices), idx] = 1.0
+
     
     # Add similarities as column to reference df
     

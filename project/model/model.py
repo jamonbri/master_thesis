@@ -65,14 +65,15 @@ class RecommenderSystemModel(mesa.Model):
         dummy: bool = False,
         seed: int | None = None,
         thresholds: tuple[int, int, int] = [5, 20, 50],
-        ignorant_proportion: float = 0.0,
+        ignorant_proportion: float = 1.0,
         rec_engine: str = "content-based",
         df: pd.DataFrame = pd.DataFrame(),
         df_items: pd.DataFrame = pd.DataFrame(),
         df_users: pd.DataFrame = pd.DataFrame(),
         initial_store_path: list[str] | None = None,
         n_recs: int = 50,
-        social_influence: bool = False
+        social_influence: bool = False,
+        run_type: str = "results"
     ):
         """
         Create a new recommender system model instance
@@ -92,10 +93,12 @@ class RecommenderSystemModel(mesa.Model):
             initial_store_path: path to preloaded files or None to store new files
             n_recs: number of recommendations to return 
             social_influence: whether recommendations can be prioritized based on social influence
+            run_type: 'results' or 'sensitivity' for sensitivity analysis
         """
         
         # Model initialization
-        print("Initializing model...\n")
+        if run_type == "results":
+            print("Initializing model...\n")
         super().__init__()
         self.num_users = n_users
         self.schedule = mesa.time.RandomActivation(self)
@@ -105,6 +108,7 @@ class RecommenderSystemModel(mesa.Model):
         self.rec_engine = rec_engine
         self.n_recs = n_recs
         self.social_influence = social_influence
+        self.run_type = run_type
 
         # Check at least 2 users
         if self.num_users < 2:
@@ -113,35 +117,56 @@ class RecommenderSystemModel(mesa.Model):
         # Model dataframe extraction
         if df.empty:
             df = get_model_df(
-                sample_users=n_users, dummy=dummy, seed=seed, thresholds=thresholds, ignorant_proportion=ignorant_proportion
+                sample_users=n_users, 
+                dummy=dummy, seed=seed, 
+                thresholds=thresholds, 
+                ignorant_proportion=ignorant_proportion
             )
         
         # Items dataframe extraction
         if df_items.empty:
-            df_items = get_items_df(df=df, priority=self.priority)
+            df_items = get_items_df(
+                df=df, 
+                priority=self.priority,
+                run_type=self.run_type
+            )
         len_df_items = len(df_items)
         
         # Users dataframe extraction
         if df_users.empty:
-            df_users = get_users_df(df=df, df_items=df_items, thresholds=thresholds, steps=self.steps, n_recs=self.n_recs)
+            df_users = get_users_df(
+                df=df, 
+                df_items=df_items, 
+                thresholds=thresholds, 
+                steps=self.steps, 
+                n_recs=self.n_recs, 
+                social_influence=self.social_influence,
+                ignorant_proportion=ignorant_proportion,
+                seed=seed,
+                run_type=self.run_type
+            )
         len_df_users = len(df_users)
         
         # User agents creation
-        print("Creating user agents...")
+        if self.run_type == "results":
+            print("Creating user agents...")
         df_users["unique_id"] = range(1, len_df_users + 1)
         user_agents = df_users.apply(self.create_user, axis=1)
         for a in user_agents:
             self.schedule.add(a)
-        print(f"    - Users added")
+        if self.run_type == "results":
+            print(f"    - Users added")
         
         # Item agents creation
-        print("Creating item agents...")
+        if self.run_type == "results":
+            print("Creating item agents...")
         df_items["unique_id"] = range(len_df_users + 1, len_df_users + 1 + len_df_items)
         item_agents = df_items.apply(self.create_item, axis=1)
         for i in item_agents:
             self.schedule.add(i)
-        print(f"    - Items added")
-        print("Finished model initialization!")
+        if self.run_type == "results":
+            print(f"    - Items added")
+            print("Finished model initialization!")
 
         # Data collection setup
         self.datacollector = mesa.DataCollector(
@@ -158,10 +183,12 @@ class RecommenderSystemModel(mesa.Model):
         # Create results folder
         self.results = Results()
         if not initial_store_path:
-            self.results.create_new_directory()
+            self.results.create_new_directory(run_type)
             self.csv_filepaths.extend(
                 self.results.store(
-                    prefix="initial", data=[("interactions", df), ("items", df_items), ("users", df_users)]
+                    prefix="initial", 
+                    data=[("interactions", df), ("items", df_items), ("users", df_users)],
+                    run_type=self.run_type
                 )
             )
         else:
@@ -194,7 +221,9 @@ class RecommenderSystemModel(mesa.Model):
             self.step()
             print(f"Step {i + 1}/{self.steps} executed.", end="\r")
         self.csv_filepaths.extend(
-            self.results.store(prefix="run", data=[("raw", self.get_raw_df())])
+            self.results.store(
+                prefix="run", data=[("raw", self.get_raw_df())], run_type=self.run_type
+            )
         )
 
     def get_raw_df(self) -> pd.DataFrame:
