@@ -123,6 +123,7 @@ matplotlib==3.8.3
     # via
     #   -r requirements.in
     #   mesa
+    #   seaborn
 matplotlib-inline==0.1.6
     # via
     #   ipykernel
@@ -147,6 +148,7 @@ numpy==1.26.4
     #   pandas
     #   scikit-learn
     #   scipy
+    #   seaborn
 packaging==23.2
     # via
     #   ipykernel
@@ -155,6 +157,7 @@ pandas==2.2.1
     # via
     #   -r requirements.in
     #   mesa
+    #   seaborn
 parso==0.8.3
     # via jedi
 pexpect==4.9.0
@@ -222,6 +225,8 @@ scikit-learn==1.4.1.post1
     # via -r requirements.in
 scipy==1.12.0
     # via scikit-learn
+seaborn==0.13.2
+    # via -r requirements.in
 six==1.16.0
     # via
     #   asttokens
