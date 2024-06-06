@@ -181,7 +181,7 @@ def reformat_dict(d: dict) -> dict:
     genres.update({k: 0 for k in get_categories() if k not in genres})
     return genres
 
-def get_items_df(df: pd.DataFrame, priority: str | None = None, run_type: str = "results") -> pd.DataFrame:
+def get_items_df(df: pd.DataFrame, priority: str | None = None, verbose: bool = False) -> pd.DataFrame:
     """
     Get aggregated items df
     
@@ -190,7 +190,7 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None, run_type: str = 
         priority: item priority strategy
     """
     
-    if run_type == "results":
+    if verbose:
         print("Getting items dataframe...")
     cat_cols = get_categories()
     aggregations = {
@@ -205,7 +205,7 @@ def get_items_df(df: pd.DataFrame, priority: str | None = None, run_type: str = 
     items_df = items_df.drop(cat_cols, axis=1)
     items_df["priority"] = items_df.apply(calculate_priority, args=(priority,), axis=1)
     
-    if run_type == "results":
+    if verbose:
         print(f"    - Items dataframe ready. Items: {len(items_df)}")
     return items_df
 
@@ -238,7 +238,7 @@ def get_users_df(
     social_influence: bool,
     ignorant_proportion: float,
     seed: int | None,
-    run_type: str = "results"
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
     Get aggregated users df
@@ -253,7 +253,7 @@ def get_users_df(
         ignorant_proportion: optional calculation of naiveness 
         seed: random state
     """
-    if run_type == "results":
+    if verbose:
         print("Getting users dataframe...")
     tmp_df = df.copy()
     cat_cols = get_categories()
@@ -313,7 +313,7 @@ def get_users_df(
     else:
         users_df["similarities"] = None
         
-    if run_type == "results":
+    if verbose:
         print(f"    - Users dataframe ready. Users: {len(users_df)}")
     return users_df
 

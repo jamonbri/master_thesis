@@ -10,7 +10,7 @@ class Results:
     def __init__(self) -> None:
         pass
     
-    def create_new_directory(self, run_type: str = "results") -> None:
+    def create_new_directory(self, run_type: str = "results", verbose: bool = False) -> None:
         """
         Creates a new results directory for the model instance files
 
@@ -19,7 +19,7 @@ class Results:
         """
         today = date.today()
         sim_run_counter = 1
-        directory = f"{run_type}/{today}_{sim_run_counter}"
+        directory = f"{run_type}/{today}_0{sim_run_counter}"
         try:
             base_path = os.path.dirname(__file__)
         except NameError:
@@ -31,10 +31,10 @@ class Results:
             directory = f"{run_type}/{today}_{sim_run_counter}" if sim_run_counter >= 10 else f"{run_type}/{today}_0{sim_run_counter}"
             self.path = os.path.join(base_path, directory)
         os.mkdir(self.path)
-        if run_type == "results":
+        if verbose:
             print(f"Directory created: {directory.split('/')[-1]}")
 
-    def store(self, prefix: str, data: list[tuple[str, pd.DataFrame]], run_type: str = "results") -> list[str]:
+    def store(self, prefix: str, data: list[tuple[str, pd.DataFrame]], verbose: bool = False) -> list[str]:
         """
         Store pandas dataframes as csv files in path of class directory. Returns list with filepaths
 
@@ -55,6 +55,6 @@ class Results:
                 path = os.path.join(self.path, filepath)
             d[1].to_csv(path)
             filepaths.append(path)
-            if run_type == "results":
+            if verbose:
                 print(f"\ndf {d[0]} stored")
         return filepaths

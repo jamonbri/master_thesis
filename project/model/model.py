@@ -73,7 +73,8 @@ class RecommenderSystemModel(mesa.Model):
         initial_store_path: list[str] | None = None,
         n_recs: int = 50,
         social_influence: bool = False,
-        run_type: str = "results"
+        run_type: str = "results",
+        verbose: bool = False
     ):
         """
         Create a new recommender system model instance
@@ -97,7 +98,7 @@ class RecommenderSystemModel(mesa.Model):
         """
         
         # Model initialization
-        if run_type == "results":
+        if verbose:
             print("Initializing model...\n")
         super().__init__()
         self.num_users = n_users
@@ -109,6 +110,7 @@ class RecommenderSystemModel(mesa.Model):
         self.n_recs = n_recs
         self.social_influence = social_influence
         self.run_type = run_type
+        self.verbose = verbose
 
         # Check at least 2 users
         if self.num_users < 2:
@@ -118,7 +120,8 @@ class RecommenderSystemModel(mesa.Model):
         if df.empty:
             df = get_model_df(
                 sample_users=n_users, 
-                dummy=dummy, seed=seed, 
+                dummy=dummy, 
+                seed=seed, 
                 thresholds=thresholds, 
                 ignorant_proportion=ignorant_proportion
             )
@@ -128,7 +131,7 @@ class RecommenderSystemModel(mesa.Model):
             df_items = get_items_df(
                 df=df, 
                 priority=self.priority,
-                run_type=self.run_type
+                verbose=self.verbose
             )
         len_df_items = len(df_items)
         
@@ -143,28 +146,28 @@ class RecommenderSystemModel(mesa.Model):
                 social_influence=self.social_influence,
                 ignorant_proportion=ignorant_proportion,
                 seed=seed,
-                run_type=self.run_type
+                verbose=self.verbose
             )
         len_df_users = len(df_users)
         
         # User agents creation
-        if self.run_type == "results":
+        if self.verbose:
             print("Creating user agents...")
         df_users["unique_id"] = range(1, len_df_users + 1)
         user_agents = df_users.apply(self.create_user, axis=1)
         for a in user_agents:
             self.schedule.add(a)
-        if self.run_type == "results":
+        if self.verbose:
             print(f"    - Users added")
         
         # Item agents creation
-        if self.run_type == "results":
+        if self.verbose:
             print("Creating item agents...")
         df_items["unique_id"] = range(len_df_users + 1, len_df_users + 1 + len_df_items)
         item_agents = df_items.apply(self.create_item, axis=1)
         for i in item_agents:
             self.schedule.add(i)
-        if self.run_type == "results":
+        if self.verbose:
             print(f"    - Items added")
             print("Finished model initialization!")
 
@@ -183,12 +186,12 @@ class RecommenderSystemModel(mesa.Model):
         # Create results folder
         self.results = Results()
         if not initial_store_path:
-            self.results.create_new_directory(run_type)
+            self.results.create_new_directory(run_type=run_type, verbose=self.verbose)
             self.csv_filepaths.extend(
                 self.results.store(
                     prefix="initial", 
                     data=[("interactions", df), ("items", df_items), ("users", df_users)],
-                    run_type=self.run_type
+                    verbose=self.verbose
                 )
             )
         else:
@@ -222,7 +225,7 @@ class RecommenderSystemModel(mesa.Model):
             print(f"Step {i + 1}/{self.steps} executed.", end="\r")
         self.csv_filepaths.extend(
             self.results.store(
-                prefix="run", data=[("raw", self.get_raw_df())], run_type=self.run_type
+                prefix="run", data=[("raw", self.get_raw_df())], verbose=self.verbose
             )
         )
 

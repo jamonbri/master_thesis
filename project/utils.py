@@ -121,7 +121,7 @@ def unit_normalize_vector(v: np.ndarray) -> np.array:
         return v
     return v / norm
 
-def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False, stats: str | None = None) -> None:
+def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filtered: bool = False) -> None:
     """
     Distribution of books by genre with stacked bars for the top three genre positions per book.
     """
@@ -153,23 +153,31 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False, st
 
     # Print stats
     total_counts = max_values + second_max_values + third_max_values
-    if stats:
-        if stats == "total":
-            uniformity_test = get_stats(total_counts)
-        elif stats == "max":
-            uniformity_test = get_stats(max_values)
-        elif stats == "second_max":
-            uniformity_test = get_stats(second_max_values)
-        elif stats == "third_max":
-            uniformity_test = get_stats(third_max_values)
-        print(f"Standard deviation for {stats}: {uniformity_test[1]}")
-        print(f"Coefficient of variation for {stats}: {uniformity_test[0]}")
+
+    if stats == "total":
+        uniformity_test = get_stats(total_counts)
+        sorted_indices = total_counts.sort_values(ascending=False).index
+    elif stats == "max":
+        uniformity_test = get_stats(max_values)
+        sorted_indices = max_values.sort_values(ascending=False).index
+    elif stats == "second_max":
+        uniformity_test = get_stats(second_max_values)
+        sorted_indices = second_max_values.sort_values(ascending=False).index
+    elif stats == "third_max":
+        uniformity_test = get_stats(third_max_values)
+        sorted_indices = third_max_values.sort_values(ascending=False).index
+    print(f"Standard deviation for {stats}: {uniformity_test[1]}")
+    print(f"Coefficient of variation for {stats}: {uniformity_test[0]}")
     
     # Plot
+    max_values = max_values.iloc[sorted_indices]
+    second_max_values = second_max_values.iloc[sorted_indices]
+    third_max_values = third_max_values.iloc[sorted_indices]
+    sorted_categories = [categories[i] for i in sorted_indices]
     plt.figure(figsize=(12, 8))
-    plt.bar(categories, max_values, color="blue", label="Max")
-    plt.bar(categories, second_max_values, bottom=max_values, color="green", label="Second Max")
-    plt.bar(categories, third_max_values, bottom=max_values + second_max_values, color="red", label="Third Max")
+    plt.bar(sorted_categories, max_values, color="blue", label="Max")
+    plt.bar(sorted_categories, second_max_values, bottom=max_values, color="green", label="Second Max")
+    plt.bar(sorted_categories, third_max_values, bottom=max_values + second_max_values, color="red", label="Third Max")
 
     plt.xlabel("Genres")
     plt.ylabel("Count of Books")
