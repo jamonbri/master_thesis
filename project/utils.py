@@ -112,14 +112,38 @@ def unit_normalize_vector(v: np.ndarray) -> np.array:
     return v / norm
 
 def plot_book_distribution_by_genre(df: pd.DataFrame) -> None:
-    df["normalized_vector"] = df["vector"].apply(normalize_vector)
-    df["max_position"] = df["normalized_vector"].apply(lambda x: np.argmax(x))
-    max_values = df["max_position"].value_counts().reindex(range(0, 15), fill_value=0)
-    plt.figure(figsize=(10, 6))
-    plt.bar(get_categories(), max_values, color="blue")
+    """
+    Distribution of books by genre with stacked bars for the top three genre positions per book.
+    """
+    # Apply normalization
+    df["vector"] = df["vector"].apply(string_to_array)
+    df["normalized_vector"] = df["vector"].apply(lambda x: normalize_vector(x.flatten()))
+
+    # Extract the top 3 indices for each vector
+    def top_indices(x):
+        return np.argsort(x)[-3:][::-1]
+
+    df["top_indices"] = df["normalized_vector"].apply(top_indices)
+    df = df[df["top_indices"].apply(lambda x: len(x) == 3)]
+    df["max_position"] = df["top_indices"].apply(lambda x: x[0])
+    df["second_max_position"] = df["top_indices"].apply(lambda x: x[1])
+    df["third_max_position"] = df["top_indices"].apply(lambda x: x[2])
+
+    # Calculate counts and reindex to include all categories
+    max_values = df["max_position"].value_counts().reindex(range(16), fill_value=0)
+    second_max_values = df["second_max_position"].value_counts().reindex(range(16), fill_value=0)
+    third_max_values = df["third_max_position"].value_counts().reindex(range(16), fill_value=0)
+
+    # Plot
+    plt.figure(figsize=(12, 8))
+    plt.bar(get_categories(), max_values, color="blue", label="Max")
+    plt.bar(get_categories(), second_max_values, bottom=max_values, color="green", label="Second Max")
+    plt.bar(get_categories(), third_max_values, bottom=max_values + second_max_values, color="red", label="Third Max")
+
     plt.xlabel("Genres")
     plt.ylabel("Count of Books")
     plt.xticks(rotation=45)
+    plt.legend()
     plt.show()
 
 def get_vector_diff_df(filename: str) -> pd.DataFrame:
