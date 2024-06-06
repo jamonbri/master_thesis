@@ -31,11 +31,12 @@ def get_categories() -> list[str]:
 
 def get_filtered_categories() -> list[str]:
     """
-    Return list of categories without fiction and non_fiction
+    Return list of categories without general categories (fiction, non_fiction and historical_fiction)
     """
     categories = get_categories()
     categories.remove("non_fiction")
     categories.remove("fiction")
+    categories.remove("historical_fiction")
     return categories
 
 def divide_into_three(n: int) -> tuple[int, int, int]:
@@ -120,7 +121,7 @@ def unit_normalize_vector(v: np.ndarray) -> np.array:
         return v
     return v / norm
 
-def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False) -> None:
+def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False, stats: str | None = None) -> None:
     """
     Distribution of books by genre with stacked bars for the top three genre positions per book.
     """
@@ -132,7 +133,7 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False) ->
 
     if filtered:
         categories = get_filtered_categories()
-        tmp_df["normalized_vector"] = tmp_df["normalized_vector"].apply(lambda x: np.delete(x, [-1, 1]))
+        tmp_df["normalized_vector"] = tmp_df["normalized_vector"].apply(lambda x: np.delete(x, [-1, 10, 1]))
     else:
         categories = get_categories()
 
@@ -150,6 +151,20 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False) ->
     second_max_values = tmp_df["second_max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
     third_max_values = tmp_df["third_max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
 
+    # Print stats
+    total_counts = max_values + second_max_values + third_max_values
+    if stats:
+        if stats == "total":
+            uniformity_test = get_stats(total_counts)
+        elif stats == "max":
+            uniformity_test = get_stats(max_values)
+        elif stats == "second_max":
+            uniformity_test = get_stats(second_max_values)
+        elif stats == "third_max":
+            uniformity_test = get_stats(third_max_values)
+        print(f"Standard deviation for {stats}: {uniformity_test[1]}")
+        print(f"Coefficient of variation for {stats}: {uniformity_test[0]}")
+    
     # Plot
     plt.figure(figsize=(12, 8))
     plt.bar(categories, max_values, color="blue", label="Max")
@@ -161,6 +176,11 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, filtered: bool = False) ->
     plt.xticks(rotation=90)
     plt.legend()
     plt.show()
+
+def get_stats(series: pd.Series) -> tuple[float, float]:
+    avg = series.mean()
+    std_dev = series.std()
+    return std_dev / avg, std_dev
 
 def get_vector_diff_df(filename: str) -> pd.DataFrame:
     """
