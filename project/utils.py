@@ -190,15 +190,18 @@ def get_stats(series: pd.Series) -> tuple[float, float]:
     std_dev = series.std()
     return std_dev / avg, std_dev
 
-def get_vector_diff_df(filename: str) -> pd.DataFrame:
+def get_vector_diff_df(filename: str | pd.DataFrame) -> pd.DataFrame:
     """
     Get vector differences dataframeas cosine similarity between first 
     and last vector of each agent
 
     Args:
-        filename: path of CSV file
+        filename: path of CSV file or dataframe
     """
-    df = pd.read_csv(filename)
+    if isinstance(filename, str):
+        df = pd.read_csv(filename)
+    else:
+        df = filename
     filtered_df = df[df["agent_type"] == "UserAgent"][["AgentID", "Step", "vector"]]
     result_data = []
     for agent_id, group in filtered_df.groupby("AgentID"):
@@ -209,3 +212,20 @@ def get_vector_diff_df(filename: str) -> pd.DataFrame:
             diff = cosine_similarity(first_vector, last_vector)[0][0]
             result_data.append({"AgentID": agent_id, "vector_diff": diff})
     return pd.DataFrame(result_data)
+
+def load_results_dfs(path: str, i: int, model: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load dataframes from results
+
+    Args:
+        path: path to simulation folder
+        i: number of simulation run
+        model: simulation model run
+    """
+    results_path = os.path.join(path, "run_raw_1.csv")
+    users_path = os.path.join(path, "initial_users_1.csv")
+    df_results = get_vector_diff_df(results_path)
+    df_users = pd.read_csv(users_path)
+    df_results["run"] = i
+    df_users["run"] = i
+    return df_results, df_users
