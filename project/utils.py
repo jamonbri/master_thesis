@@ -70,6 +70,7 @@ def plot_agent_vector(df: pd.DataFrame, agent_id: int) -> None:
         plt.show()
 
 def plot_vector_diffs(df: pd.DataFrame, model: str) -> None:
+    plt.figure(figsize=(10, 6))
     ax = df["vector_diff"].hist(
         bins=20, 
         grid=False, 
@@ -134,8 +135,10 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filter
     if filtered:
         categories = get_filtered_categories()
         tmp_df["normalized_vector"] = tmp_df["normalized_vector"].apply(lambda x: np.delete(x, [-1, 10, 1]))
+        title = "(without fiction and non_fiction)"
     else:
         categories = get_categories()
+        title = ""
 
     # Extract the top 3 indices for each vector
     def top_indices(x):
@@ -181,6 +184,7 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filter
 
     plt.xlabel("Genres")
     plt.ylabel("Count of Books")
+    plt.title(f"Distribution of book genres by most common categories in vectors {title}")
     plt.xticks(rotation=90)
     plt.legend()
     plt.show()
