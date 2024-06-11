@@ -5,6 +5,7 @@ import os
 from typing import Any
 import ast
 from sklearn.metrics.pairwise import cosine_similarity
+import seaborn as sns
 
 def get_categories() -> list[str]:
     """
@@ -82,6 +83,22 @@ def plot_vector_diffs(df: pd.DataFrame, model: str) -> None:
     plt.ylabel("Frequency")
     plt.title(f"Histogram of cosine similarity between first and last vector per user ({model})")
     plt.legend()
+    plt.xlim(0.5, 1)
+    plt.show()
+
+def plot_vector_diffs_by_persona(df: pd.DataFrame, model: str) -> None:
+    plt.figure(figsize=(10, 6))
+    low = df[df["persona"] == "low"]["vector_diff"]
+    mid = df[df["persona"] == "mid"]["vector_diff"]
+    high = df[df["persona"] == "high"]["vector_diff"]
+    sns.histplot(data=low, bins=20, color="orange", alpha=0.5, kde=False, label="Low")
+    sns.histplot(data=mid, bins=20, color="green", alpha=0.5, kde=False, label="Mid")
+    sns.histplot(data=high, bins=20, color="blue", alpha=0.5, kde=False, label="High")
+    plt.xlabel("Cosine similarity")
+    plt.ylabel("Frequency")
+    plt.title(f"Histogram of cosine similarity between first and last vector per user ({model})")
+    plt.legend(title="Reader persona")
+    plt.xlim(0.5, 1)
     plt.show()
 
 def list_file_paths(directory: str) -> list:
