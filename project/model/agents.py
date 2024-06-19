@@ -196,7 +196,10 @@ class UserAgent(mesa.Agent):
         items_matrix = np.array([unit_normalize_vector(v) for v in items_matrix])
         vector = unit_normalize_vector(self.vector.flatten())
         similarities = np.dot(items_matrix, vector)
-        results = {item.book_id: round(cosine_sim, 4) for item, cosine_sim in zip(items, similarities)}
+        results = {
+            item.book_id: 1.0 if item.priority == 1.0 and self.ignorant == True else round(cosine_sim, 4) 
+            for item, cosine_sim in zip(items, similarities)
+        }
         sorted_items = sorted(results.items(), key=lambda x: x[1], reverse=True)
         self.similarities = dict(sorted_items[:n_books])
         self.should_update_similarities = False

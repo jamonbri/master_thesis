@@ -232,7 +232,6 @@ def calculate_priority(row: pd.Series, priority: str | float | None = None) -> f
 def get_users_df(
     df: pd.DataFrame, 
     df_items: pd.DataFrame, 
-    steps: int, 
     thresholds: tuple[int, int, int],
     n_recs: int,
     social_influence: bool,
@@ -246,7 +245,6 @@ def get_users_df(
     Args: 
         df: interactions dataframe
         df_items: items dataframe
-        steps: steps in simulation
         thresholds: books per year limit for low-mid and mid-high reader personas 
         n_recs: number of recommendations
         social_influence: boolean to toggle on social influence
@@ -274,9 +272,9 @@ def get_users_df(
     low_readers_average = thresholds[0] / 2
     mid_readers_average = (thresholds[1] - thresholds[0]) / 2 + thresholds[0]
     high_readers_average = (thresholds[2] - thresholds[1]) / 2 + thresholds[1]
-    low_readers_proba = round(low_readers_average / steps, 4)
-    mid_readers_proba = round(mid_readers_average / steps, 4)
-    high_readers_proba = round(high_readers_average / steps, 4)
+    low_readers_proba = round(low_readers_average / 360, 4)
+    mid_readers_proba = round(mid_readers_average / 360, 4)
+    high_readers_proba = round(high_readers_average / 360, 4)
 
     users_df = tmp_df.groupby(by=["user_id"]).agg(aggregations)
     users_df["vector"] = users_df.apply(lambda row: np.array(row[cat_cols]).reshape(1, -1), axis=1)

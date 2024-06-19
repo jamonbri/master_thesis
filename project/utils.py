@@ -88,16 +88,11 @@ def plot_vector_diffs(df: pd.DataFrame, model: str) -> None:
 
 def plot_vector_diffs_by_persona(df: pd.DataFrame, model: str) -> None:
     plt.figure(figsize=(10, 6))
-    low = df[df["persona"] == "low"]["vector_diff"]
-    mid = df[df["persona"] == "mid"]["vector_diff"]
-    high = df[df["persona"] == "high"]["vector_diff"]
-    sns.histplot(data=low, bins=20, color="orange", alpha=0.5, kde=False, label="Low")
-    sns.histplot(data=mid, bins=20, color="green", alpha=0.5, kde=False, label="Mid")
-    sns.histplot(data=high, bins=20, color="blue", alpha=0.5, kde=False, label="High")
+    ax = sns.histplot(data=df, x="vector_diff", hue="persona", bins=20, alpha=0.5, element="poly")
+    sns.move_legend(ax, "upper left")
     plt.xlabel("Cosine similarity")
-    plt.ylabel("Frequency")
+    plt.ylabel("Count")
     plt.title(f"Histogram of cosine similarity between first and last vector per user ({model})")
-    plt.legend(title="Reader persona")
     plt.xlim(0.5, 1)
     plt.show()
 
@@ -159,7 +154,16 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filter
 
     # Extract the top 3 indices for each vector
     def top_indices(x):
-        return np.argsort(x)[-3:][::-1]
+        indices = np.argsort(x)[-3:][::-1]
+        values = x[indices]
+        if values[0] == values[1] == values[2]:
+            return [indices, None, None]
+        elif values[0] == values[1]:
+            return [indices[0:1], indices[2], None]
+        elif values[1] == values[2]:
+            return [indices[0], indices[1:2], None]
+        else:
+            return indices
 
     tmp_df["top_indices"] = tmp_df["normalized_vector"].apply(top_indices)
     tmp_df["max_position"] = tmp_df["top_indices"].apply(lambda x: x[0])
@@ -167,9 +171,9 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filter
     tmp_df["third_max_position"] = tmp_df["top_indices"].apply(lambda x: x[2])
 
     # Calculate counts and reindex to include all categories
-    max_values = tmp_df["max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
-    second_max_values = tmp_df["second_max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
-    third_max_values = tmp_df["third_max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
+    max_values = tmp_df.explode("max_position")["max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
+    second_max_values = tmp_df.explode("second_max_position")["second_max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
+    third_max_values = tmp_df.explode("third_max_position")["third_max_position"].value_counts().reindex(range(len(categories)), fill_value=0)
 
     # Print stats
     total_counts = max_values + second_max_values + third_max_values

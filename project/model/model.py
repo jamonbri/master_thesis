@@ -141,7 +141,6 @@ class RecommenderSystemModel(mesa.Model):
                 df=df, 
                 df_items=df_items, 
                 thresholds=thresholds, 
-                steps=self.steps, 
                 n_recs=self.n_recs, 
                 social_influence=self.social_influence,
                 ignorant_proportion=ignorant_proportion,
