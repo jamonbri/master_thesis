@@ -37,7 +37,6 @@ def get_filtered_categories() -> list[str]:
     categories = get_categories()
     categories.remove("non_fiction")
     categories.remove("fiction")
-    categories.remove("historical_fiction")
     return categories
 
 def divide_into_three(n: int) -> tuple[int, int, int]:
@@ -72,15 +71,11 @@ def plot_agent_vector(df: pd.DataFrame, agent_id: int) -> None:
 
 def plot_vector_diffs(df: pd.DataFrame, model: str) -> None:
     plt.figure(figsize=(10, 6))
-    ax = df["vector_diff"].hist(
-        bins=20, 
-        grid=False, 
-        edgecolor="black"
-    )
+    ax = sns.histplot(data=df, x="vector_diff", bins=20, alpha=0.5)
     median_value = df["vector_diff"].median()
     plt.axvline(median_value, color="r", linestyle="dotted", linewidth=2, label=f"Median: {median_value:.6f}")
     plt.xlabel("Cosine similarity")
-    plt.ylabel("Frequency")
+    plt.ylabel("Count")
     plt.title(f"Histogram of cosine similarity between first and last vector per user ({model})")
     plt.legend()
     plt.xlim(0.5, 1)
@@ -88,7 +83,15 @@ def plot_vector_diffs(df: pd.DataFrame, model: str) -> None:
 
 def plot_vector_diffs_by_persona(df: pd.DataFrame, model: str) -> None:
     plt.figure(figsize=(10, 6))
-    ax = sns.histplot(data=df, x="vector_diff", hue="persona", bins=20, alpha=0.5, element="poly")
+    def update_df(row):
+        if row["persona"] == "low":
+            return "Casual"
+        elif row["persona"] == "mid":
+            return "Selective"
+        else:
+            return "Avid"
+    df["persona"] = df.apply(update_df, axis=1)
+    ax = sns.histplot(data=df, x="vector_diff", hue="persona", bins=20, alpha=0.5, element="poly", hue_order=["Avid", "Selective", "Casual"])
     sns.move_legend(ax, "upper left")
     plt.xlabel("Cosine similarity")
     plt.ylabel("Count")
@@ -146,7 +149,7 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filter
 
     if filtered:
         categories = get_filtered_categories()
-        tmp_df["normalized_vector"] = tmp_df["normalized_vector"].apply(lambda x: np.delete(x, [-1, 10, 1]))
+        tmp_df["normalized_vector"] = tmp_df["normalized_vector"].apply(lambda x: np.delete(x, [-1, 1]))
         title = "(without fiction and non_fiction)"
     else:
         categories = get_categories()
@@ -154,16 +157,16 @@ def plot_book_distribution_by_genre(df: pd.DataFrame, stats: str = "max", filter
 
     # Extract the top 3 indices for each vector
     def top_indices(x):
-        indices = np.argsort(x)[-3:][::-1]
-        values = x[indices]
-        if values[0] == values[1] == values[2]:
-            return [indices, None, None]
-        elif values[0] == values[1]:
-            return [indices[0:1], indices[2], None]
-        elif values[1] == values[2]:
-            return [indices[0], indices[1:2], None]
-        else:
-            return indices
+        unique_values = np.unique(x)[::-1]
+        top_indices = []
+        for value in unique_values[:3]: 
+            indices = np.where(x == value)
+            top_indices.append(list(indices[0]))
+
+        while len(top_indices) < 3:
+            top_indices.append(None)
+        
+        return top_indices
 
     tmp_df["top_indices"] = tmp_df["normalized_vector"].apply(top_indices)
     tmp_df["max_position"] = tmp_df["top_indices"].apply(lambda x: x[0])
@@ -254,3 +257,40 @@ def load_results_dfs(path: str, i: int, model: str) -> tuple[pd.DataFrame, pd.Da
     df_results["run"] = i
     df_users["run"] = i
     return df_results, df_users
+
+def get_books_read(df: pd.DataFrame) -> pd.DataFrame:
+    df_filtered = df[df["agent_type"] == "UserAgent"]
+    df_filtered["books_read"] = df_filtered["user_books_consumed"].apply(ast.literal_eval).apply(len)
+    df_filtered = df_filtered.sort_values(by=["AgentID", "Step"])
+    df_grouped = df_filtered.groupby("AgentID").last()["books_read"].reset_index()
+    return df_grouped
+
+def plot_books_consumed(model: str) -> None:
+    results = []
+    base_path = "data/results"
+    runs = sorted(os.listdir(base_path))
+    runs.pop(0)
+    if model == "benchmark":
+        start = 0
+        stop = 20
+    elif model == "covert":
+        start = 20
+        stop = 40
+    elif model == "overt":
+        start = 40
+        stop = 60
+    elif model == "overt_w_si":
+        start = 60
+        stop = 80
+    for i in range(start, stop):
+        full_path = os.path.join(base_path, runs[i], "run_raw_1.csv")
+        df = pd.read_csv(full_path)
+        results.append(get_books_read(df))
+        print(f"{i + 1}/{stop}", end="\r")
+    result = pd.concat(results)
+    result = result.groupby("AgentID")["books_read"].mean().reset_index()
+    ax = sns.histplot(data=result, x="books_read", alpha=0.5, color="purple")
+    plt.xlabel("Books consumed")
+    plt.ylabel("Count")
+    plt.title(f"Histogram of average books consumed per user ({model})")
+    plt.show()
